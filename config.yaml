@@ -1,0 +1,84 @@
+# TdrCreator – Beispiel-Konfiguration
+# Kopiere diese Datei als Ausgangsbasis und passe sie an dein Projekt an.
+
+# ── Projektmetadaten ──────────────────────────────────────────────────────────
+project_title: "Transfer-Dokumentations-Report: Beispielprojekt"
+topic: "Microservice-Architektur und API-Gateway-Migration"
+audience: "technische Stakeholder, Architekten, DevOps-Team"
+language: de          # de | en
+tone: formal          # z.B. formal, sachlich, präzise
+
+# ── Umfang ───────────────────────────────────────────────────────────────────
+# Entweder target_words ODER target_pages angeben (target_words hat Vorrang).
+target_words: 8000    # Gesamtwortzahl des Reports
+# target_pages: 20   # Alternative: Seitenziel (1 Seite ≈ 400 Wörter)
+detail_level: high    # low | med | high
+
+# ── Zitation & Wissenschaftlichkeit ──────────────────────────────────────────
+citation_style: apa   # apa | ieee
+scientific_mode: true # Zitationspflicht aktiv; Validator schlägt fehl wenn Quellen fehlen
+
+# ── Lokales LLM (Ollama) ─────────────────────────────────────────────────────
+# WICHTIG: muss auf localhost/LAN zeigen – niemals externe API-Endpunkte!
+llm_base_url: "http://localhost:11434"
+llm_model: "llama3"   # Beliebiges lokal installiertes Ollama-Modell
+llm_temperature: 0.2
+llm_timeout: 120      # Sekunden pro LLM-Aufruf
+
+# ── Lokales Embedding-Modell ─────────────────────────────────────────────────
+# Wird beim ersten Aufruf von HuggingFace heruntergeladen und dann lokal gecacht.
+embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+
+# ── Retrieval (RAG) ──────────────────────────────────────────────────────────
+retrieval:
+  chunk_size: 512     # Zeichen pro Chunk
+  overlap: 64         # Überlapp zwischen Chunks
+  top_k: 8            # Chunks pro Retrieval-Anfrage
+  mmr: true           # Maximal Marginal Relevance (Diversität)
+  mmr_lambda: 0.6     # 1.0 = reine Relevanz, 0.0 = reine Diversität
+
+# ── Externe Literaturrecherche ────────────────────────────────────────────────
+literature:
+  enabled: true
+  max_papers: 20
+  year_range: [2015, 2026]
+  allowed_keywords:
+    - "microservices architecture"
+    - "API gateway patterns"
+    - "service mesh kubernetes"
+    - "distributed systems resilience"
+  query_guard: true   # Jede externe Query anzeigen und Bestätigung verlangen
+  sources:
+    - crossref
+    - openalex
+    - arxiv
+
+# ── Abschnitte ein-/ausschalten ───────────────────────────────────────────────
+sections:
+  abstract: true
+  context_scope: true
+  methodology: true
+  results: true
+  decisions: true
+  operations: true
+  risks: true
+  glossary: true
+  references: true
+  internal_sources: true
+  appendix: true
+
+# ── Output ────────────────────────────────────────────────────────────────────
+output:
+  md: true            # Markdown (Pflicht)
+  docx: false         # DOCX via python-docx oder pandoc
+  pdf: false          # PDF via pandoc (xelatex) oder reportlab
+  output_dir: "out"
+
+# ── Privacy & Sicherheit ─────────────────────────────────────────────────────
+privacy:
+  allow_network_for_literature: true   # Externe APIs nur für Metadaten/Abstracts
+  encrypt_index: false                 # Zukünftig: AES-256 Indexverschlüsselung
+
+# ── Verzeichnisse ─────────────────────────────────────────────────────────────
+docs_dir: "sample_docs"       # Standard-Dokumentenordner (überschreibbar via CLI)
+index_dir: ".tdr_index"       # Lokaler FAISS-Indexordner

@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TdrCreator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { brand: { 600: '#4f46e5', 700: '#4338ca', 100: '#e0e7ff' } }
+        }
+      }
+    }
+  </script>
+  <style>
+    #log-output { font-family: 'Courier New', monospace; font-size: 0.8rem; }
+    .log-INFO    { color: #d1fae5; }
+    .log-WARNING { color: #fde68a; }
+    .log-ERROR   { color: #fca5a5; }
+    .log-METRIC  { color: #93c5fd; }
+    .log-DEBUG   { color: #9ca3af; }
+    .drop-active { border-color: #4f46e5 !important; background: #eef2ff !important; }
+    .tab-active  { border-bottom: 2px solid #4f46e5; color: #4f46e5; font-weight: 600; }
+    .fade-in     { animation: fadeIn .2s ease-in; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; } }
+    .dt-intern   { background:#dbeafe; color:#1e40af; }
+    .dt-schulung { background:#fef3c7; color:#92400e; }
+    .dt-entwurf  { background:#d1fae5; color:#065f46; }
+    .dt-extern   { background:#fce7f3; color:#9d174d; }
+    .dt-literatur{ background:#ede9fe; color:#5b21b6; }
+    .dt-allgemein{ background:#f3f4f6; color:#374151; }
+    .dt-btn { border: 2px solid transparent; transition: all .15s; }
+    .dt-btn.selected { border-color: currentColor; font-weight: 600; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800">
+
+<!-- ════════════════════════════════ HEADER ═══════════════════════════════ -->
+<header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+  <div class="flex items-center gap-3">
+    <span class="text-2xl">📄</span>
+    <span class="font-bold text-xl text-brand-600">TdrCreator</span>
+    <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">🔒 Lokal &amp; Privat</span>
+  </div>
+  <div class="flex items-center gap-4 text-sm">
+    <div id="llm-badge" class="flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full">
+      <span id="llm-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
+      <span id="llm-label">LLM: prüfe…</span>
+    </div>
+    <div id="index-badge" class="flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full">
+      <span class="text-gray-500">Index:</span>
+      <span id="index-label" class="font-mono">–</span>
+    </div>
+  </div>
+</header>
+
+<!-- ════════════════════════════════ TABS ════════════════════════════════ -->
+<nav class="bg-white border-b border-gray-200 px-6 flex gap-0">
+  <button onclick="showTab('dashboard')" id="tab-dashboard" class="tab-btn tab-active px-5 py-3 text-sm hover:text-brand-600 transition-colors">📊 Dashboard</button>
+  <button onclick="showTab('documents')" id="tab-documents" class="tab-btn px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors">📁 Dokumente</button>
+  <button onclick="showTab('config')"    id="tab-config"    class="tab-btn px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors">⚙️ Konfiguration</button>
+  <button onclick="showTab('build')"    id="tab-build"    class="tab-btn px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors">🔨 Build</button>
+  <button onclick="showTab('reports')"  id="tab-reports"  class="tab-btn px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors">📋 Reports</button>
+</nav>
+
+<!-- ════════════════════════════════ CONTENT ═════════════════════════════ -->
+<main class="max-w-6xl mx-auto px-6 py-8">
+
+  <!-- ── DASHBOARD ── -->
+  <div id="panel-dashboard" class="panel fade-in">
+    <h2 class="text-xl font-semibold mb-6">Status</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" id="status-cards"></div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-white rounded-xl border p-5">
+        <h3 class="font-semibold mb-3 text-gray-700">Workflow</h3>
+        <ol class="space-y-2 text-sm text-gray-600">
+          <li class="flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-xs font-bold flex-shrink-0">1</span>Dokumente hochladen (nach Quellentyp)</li>
+          <li class="flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-xs font-bold flex-shrink-0">2</span>Ingest – Dokumente indexieren</li>
+          <li class="flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-xs font-bold flex-shrink-0">3</span>Build – Report generieren</li>
+          <li class="flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-xs font-bold flex-shrink-0">4</span>Pitch – Kurzfassung für Präsentation</li>
+          <li class="flex items-center gap-2"><span class="w-6 h-6 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-xs font-bold flex-shrink-0">5</span>Reports herunterladen</li>
+        </ol>
+      </div>
+      <div class="bg-white rounded-xl border p-5">
+        <h3 class="font-semibold mb-3 text-gray-700">Quellentypen</h3>
+        <ul class="space-y-2 text-sm">
+          <li class="flex items-center gap-2"><span class="dt-intern px-2 py-0.5 rounded text-xs font-medium">Intern</span> Projektdokumentation, Systemdoku, Spezifikationen</li>
+          <li class="flex items-center gap-2"><span class="dt-schulung px-2 py-0.5 rounded text-xs font-medium">Schulung</span> Kursunterlagen, Lernmaterial, Slides</li>
+          <li class="flex items-center gap-2"><span class="dt-entwurf px-2 py-0.5 rounded text-xs font-medium">Entwurf</span> Eigene Ideen, Konzepte, Notizen in eigenen Worten</li>
+          <li class="flex items-center gap-2"><span class="dt-extern px-2 py-0.5 rounded text-xs font-medium">Extern</span> Manuell hinzugefügte externe Quellen</li>
+          <li class="flex items-center gap-2"><span class="dt-literatur px-2 py-0.5 rounded text-xs font-medium">Literatur</span> Wissenschaftliche Paper (ergänzend zur Auto-Suche)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── DOKUMENTE ── -->
+  <div id="panel-documents" class="panel hidden fade-in">
+    <h2 class="text-xl font-semibold mb-6">Dokumente hochladen</h2>
+
+    <!-- Source type selector -->
+    <div class="bg-white rounded-xl border p-5 mb-5">
+      <p class="text-sm font-medium text-gray-700 mb-3">Quellentyp auswählen:</p>
+      <div class="flex flex-wrap gap-2" id="doctype-btns">
+        <button onclick="selectDocType('allgemein')" data-dt="allgemein" class="dt-btn dt-allgemein selected px-3 py-1.5 rounded-lg text-xs cursor-pointer">📄 Allgemein</button>
+        <button onclick="selectDocType('intern')"    data-dt="intern"    class="dt-btn dt-intern    px-3 py-1.5 rounded-lg text-xs cursor-pointer">🏢 Interne Doku</button>
+        <button onclick="selectDocType('schulung')"  data-dt="schulung"  class="dt-btn dt-schulung  px-3 py-1.5 rounded-lg text-xs cursor-pointer">🎓 Schulungsunterlagen</button>
+        <button onclick="selectDocType('entwurf')"   data-dt="entwurf"   class="dt-btn dt-entwurf   px-3 py-1.5 rounded-lg text-xs cursor-pointer">✍️ Eigener Entwurf</button>
+        <button onclick="selectDocType('extern')"    data-dt="extern"    class="dt-btn dt-extern    px-3 py-1.5 rounded-lg text-xs cursor-pointer">🌐 Externe Quellen</button>
+        <button onclick="selectDocType('literatur')" data-dt="literatur" class="dt-btn dt-literatur px-3 py-1.5 rounded-lg text-xs cursor-pointer">📚 Literatur</button>
+      </div>
+      <p class="text-xs text-gray-400 mt-2" id="doctype-hint">Dateien werden direkt im docs/-Ordner abgelegt.</p>
+    </div>
+
+    <!-- Drop zone -->
+    <div id="dropzone"
+         class="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center mb-5 cursor-pointer transition-all hover:border-brand-600"
+         ondragover="event.preventDefault(); this.classList.add('drop-active')"
+         ondragleave="this.classList.remove('drop-active')"
+         ondrop="handleDrop(event)"
+         onclick="document.getElementById('file-input').click()">
+      <div class="text-4xl mb-3">📂</div>
+      <p class="text-gray-600 font-medium">Dateien hier ablegen oder klicken</p>
+      <p class="text-xs text-gray-400 mt-2">PDF · DOCX · MD · TXT · HTML · RST</p>
+      <input type="file" id="file-input" multiple accept=".pdf,.docx,.doc,.md,.txt,.rst,.html,.htm"
+             class="hidden" onchange="uploadFiles(this.files)" />
+    </div>
+    <div id="upload-status" class="hidden mb-4 p-3 rounded-lg text-sm"></div>
+
+    <!-- File list -->
+    <div class="bg-white rounded-xl border overflow-hidden">
+      <div class="px-5 py-3 border-b flex items-center justify-between">
+        <span class="font-medium text-sm text-gray-700">Hochgeladene Dokumente</span>
+        <button onclick="loadDocuments()" class="text-xs text-brand-600 hover:underline">↻ Aktualisieren</button>
+      </div>
+      <div id="doc-list"><p class="px-5 py-6 text-sm text-gray-400 text-center">Lade…</p></div>
+    </div>
+  </div>
+
+  <!-- ── KONFIGURATION ── -->
+  <div id="panel-config" class="panel hidden fade-in">
+    <h2 class="text-xl font-semibold mb-6">Konfiguration</h2>
+    <div class="bg-white rounded-xl border p-6">
+      <p class="text-sm text-gray-500 mb-4">
+        Bearbeite <code class="bg-gray-100 px-1 rounded">config.yaml</code> direkt.
+        Wichtige Felder: <code class="bg-gray-100 px-1 rounded">project_title</code>,
+        <code class="bg-gray-100 px-1 rounded">topic</code>,
+        <code class="bg-gray-100 px-1 rounded">llm_model</code>.
+      </p>
+      <textarea id="config-editor"
+                class="w-full h-[520px] font-mono text-sm bg-gray-900 text-green-300 rounded-lg p-4 resize-y focus:outline-none focus:ring-2 focus:ring-brand-600"
+                spellcheck="false"></textarea>
+      <div class="flex items-center gap-3 mt-4">
+        <button onclick="saveConfig()" class="btn-primary">💾 Speichern</button>
+        <button onclick="loadConfig()" class="btn-secondary">↻ Neu laden</button>
+        <span id="config-status" class="text-sm ml-2"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── BUILD ── -->
+  <div id="panel-build" class="panel hidden fade-in">
+    <h2 class="text-xl font-semibold mb-6">Build</h2>
+
+    <!-- Action buttons - row 1 -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+      <button onclick="runTask('ingest')"   id="btn-ingest"   class="btn-action bg-blue-600   hover:bg-blue-700   text-white">
+        <span class="text-xl">🔍</span><br>
+        <span class="text-sm font-medium">Ingest</span>
+        <span class="text-xs opacity-80 block">Dokumente indexieren</span>
+      </button>
+      <button onclick="runTask('build')"    id="btn-build"    class="btn-action bg-brand-600  hover:bg-brand-700  text-white">
+        <span class="text-xl">🔨</span><br>
+        <span class="text-sm font-medium">Build</span>
+        <span class="text-xs opacity-80 block">Report generieren</span>
+      </button>
+      <button onclick="runTask('pitch')"    id="btn-pitch"    class="btn-action bg-purple-600 hover:bg-purple-700 text-white">
+        <span class="text-xl">🎯</span><br>
+        <span class="text-sm font-medium">Pitch</span>
+        <span class="text-xs opacity-80 block">Kurzfassung erstellen</span>
+      </button>
+      <button onclick="runTask('validate')" id="btn-validate" class="btn-action bg-emerald-600 hover:bg-emerald-700 text-white">
+        <span class="text-xl">✅</span><br>
+        <span class="text-sm font-medium">Validate</span>
+        <span class="text-xs opacity-80 block">Zitate prüfen</span>
+      </button>
+    </div>
+
+    <!-- Danger row -->
+    <div class="flex gap-3 mb-4">
+      <button onclick="confirmWipe()" id="btn-wipe"
+              class="flex-1 py-2 rounded-lg text-sm text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors">
+        🗑️ Index löschen
+      </button>
+    </div>
+
+    <!-- Options -->
+    <div class="bg-white rounded-xl border p-4 mb-4 flex flex-wrap items-center gap-6 text-sm">
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" id="opt-reset-index" class="rounded">
+        Index vor Ingest zurücksetzen
+      </label>
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" id="opt-skip-literature" class="rounded">
+        Externe Literatur überspringen
+      </label>
+    </div>
+
+    <!-- Status bar -->
+    <div id="task-statusbar" class="hidden bg-white rounded-xl border px-5 py-3 mb-4 flex items-center gap-3 text-sm">
+      <span id="task-spinner" class="animate-spin hidden">⟳</span>
+      <span id="task-label" class="font-medium"></span>
+      <span id="task-status-badge" class="ml-auto px-2 py-0.5 rounded-full text-xs font-medium"></span>
+    </div>
+
+    <!-- Log -->
+    <div class="bg-gray-950 rounded-xl overflow-hidden border border-gray-800">
+      <div class="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+        <span class="text-gray-400 text-xs font-mono">Build Log</span>
+        <button onclick="clearLog()" class="text-gray-500 hover:text-gray-300 text-xs">✕ leeren</button>
+      </div>
+      <div id="log-output" class="h-80 overflow-y-auto p-4 text-gray-300 whitespace-pre-wrap" style="scroll-behavior:smooth;">
+        <span class="text-gray-600">Bereit – starte einen Task.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── REPORTS ── -->
+  <div id="panel-reports" class="panel hidden fade-in">
+    <h2 class="text-xl font-semibold mb-6">Reports</h2>
+    <div class="flex gap-3 mb-5">
+      <button onclick="loadReports()" class="btn-secondary text-sm">↻ Aktualisieren</button>
+      <button onclick="confirmWipeAll()" class="text-sm text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors">🗑️ Alles löschen</button>
+    </div>
+
+    <!-- Reports: Full reports -->
+    <div class="mb-6">
+      <h3 class="font-medium text-gray-700 mb-2">📋 Vollständige Reports</h3>
+      <div class="bg-white rounded-xl border overflow-hidden" id="report-list-full">
+        <p class="px-5 py-6 text-sm text-gray-400 text-center">Lade…</p>
+      </div>
+    </div>
+
+    <!-- Reports: Pitch documents -->
+    <div class="mb-6">
+      <h3 class="font-medium text-gray-700 mb-2">🎯 Pitch / Kurzfassungen</h3>
+      <div class="bg-white rounded-xl border overflow-hidden" id="report-list-pitch">
+        <p class="px-5 py-6 text-sm text-gray-400 text-center">Lade…</p>
+      </div>
+    </div>
+
+    <!-- Markdown preview -->
+    <div id="preview-container" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-gray-700" id="preview-title"></h3>
+        <button onclick="closePreview()" class="text-gray-400 hover:text-gray-600 text-sm">✕ Schließen</button>
+      </div>
+      <div id="preview-content"
+           class="bg-white rounded-xl border p-8 overflow-y-auto max-h-[70vh] text-sm leading-relaxed"></div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ════════════════════════════════ SCRIPTS ═════════════════════════════ -->
+<script>
+// ─── Utils ────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(path, opts);
+  if (!r.ok) { const t = await r.text(); throw new Error(`${r.status} ${t}`); }
+  return r.json();
+}
+function fmt(b) {
+  if (b < 1024) return `${b} B`;
+  if (b < 1048576) return `${(b/1024).toFixed(1)} KB`;
+  return `${(b/1048576).toFixed(1)} MB`;
+}
+function fmtDate(ts) {
+  return ts ? new Date(ts * 1000).toLocaleString('de-DE') : '';
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────
+const tabLoaders = {
+  dashboard: loadStatus,
+  documents: loadDocuments,
+  config:    loadConfig,
+  build:     () => {},
+  reports:   loadReports,
+};
+function showTab(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('tab-active'); b.classList.add('text-gray-500');
+  });
+  document.getElementById(`panel-${name}`).classList.remove('hidden');
+  const btn = document.getElementById(`tab-${name}`);
+  btn.classList.add('tab-active'); btn.classList.remove('text-gray-500');
+  if (tabLoaders[name]) tabLoaders[name]();
+}
+
+// ─── Status / Dashboard ───────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const s = await api('GET', '/api/status');
+    renderStatusCards(s);
+    renderHeaderBadges(s);
+  } catch(e) {
+    document.getElementById('status-cards').innerHTML =
+      `<div class="col-span-3 text-red-500 text-sm">Fehler: ${e.message}</div>`;
+  }
+}
+function renderHeaderBadges(s) {
+  const dot   = document.getElementById('llm-dot');
+  const label = document.getElementById('llm-label');
+  const idxLbl = document.getElementById('index-label');
+  if (s.llm?.connected) {
+    dot.className = 'w-2 h-2 rounded-full bg-green-500';
+    label.textContent = `LLM: ${s.llm.model}${s.llm.model_available ? '' : ' ⚠'}`;
+  } else {
+    dot.className = 'w-2 h-2 rounded-full bg-red-400';
+    label.textContent = 'LLM: offline';
+  }
+  idxLbl.textContent = s.index?.exists ? `${s.index.chunk_count} Chunks` : 'leer';
+}
+function renderStatusCards(s) {
+  const llm = s.llm || {};
+  const idx = s.index || {};
+  const cards = [
+    {
+      icon:'🤖', label:'LLM (Ollama)',
+      value: llm.connected ? llm.model : 'Nicht verbunden',
+      sub: llm.connected ? (llm.model_available ? '✓ Modell verfügbar' : '⚠ Modell nicht geladen') : (llm.error || 'Ollama nicht erreichbar'),
+    },
+    {
+      icon:'🗄️', label:'Vektorindex',
+      value: idx.exists ? `${idx.chunk_count} Chunks` : 'Kein Index',
+      sub: idx.exists ? `${idx.doc_count} Dokument(e) | ${Object.keys(idx.docs||{}).length} Dateien` : 'Bitte Ingest ausführen',
+    },
+    {
+      icon:'📁', label:'Dokumente / Reports',
+      value: `${s.docs_count || 0} Dokumente`,
+      sub: `${s.reports_count || 0} Report(s) generiert`,
+    },
+  ];
+  document.getElementById('status-cards').innerHTML = cards.map(c => `
+    <div class="bg-white rounded-xl border p-5">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="text-2xl">${c.icon}</span>
+        <span class="text-sm text-gray-500 font-medium">${c.label}</span>
+      </div>
+      <div class="text-lg font-bold text-gray-800 mb-1">${c.value}</div>
+      <div class="text-xs text-gray-500">${c.sub}</div>
+    </div>
+  `).join('');
+}
+
+// ─── Documents ────────────────────────────────────────────────────────────
+let selectedDocType = 'allgemein';
+const DOC_TYPE_HINTS = {
+  allgemein: 'Dateien werden direkt im docs/-Ordner abgelegt.',
+  intern:    'Interne Projektdokumentation, Systemspezifikationen → docs/intern/',
+  schulung:  'Kursunterlagen, Lernmaterial, Präsentationen → docs/schulung/',
+  entwurf:   'Deine Ideen & Konzepte in eigenen Worten → docs/entwurf/',
+  extern:    'Manuell hinzugefügte externe Quellen → docs/extern/',
+  literatur: 'Wissenschaftliche Paper (zusätzlich zur Auto-Suche) → docs/literatur/',
+};
+function selectDocType(dt) {
+  selectedDocType = dt;
+  document.querySelectorAll('.dt-btn').forEach(b => b.classList.remove('selected'));
+  document.querySelector(`[data-dt="${dt}"]`).classList.add('selected');
+  document.getElementById('doctype-hint').textContent = DOC_TYPE_HINTS[dt] || '';
+}
+const DT_ICON = {intern:'🏢',schulung:'🎓',entwurf:'✍️',extern:'🌐',literatur:'📚',allgemein:'📄'};
+const FILE_ICON = {'.pdf':'📄','.docx':'📝','.doc':'📝','.md':'📋','.txt':'📃','.html':'🌐','.htm':'🌐','.rst':'📋'};
+
+async function loadDocuments() {
+  const list = document.getElementById('doc-list');
+  try {
+    const { files } = await api('GET', '/api/documents');
+    if (!files.length) {
+      list.innerHTML = `<p class="px-5 py-6 text-sm text-gray-400 text-center">Noch keine Dokumente hochgeladen.</p>`;
+      return;
+    }
+    // Group by doc_type
+    const byType = {};
+    files.forEach(f => { (byType[f.doc_type] = byType[f.doc_type] || []).push(f); });
+    const typeOrder = ['entwurf','schulung','intern','extern','literatur','allgemein'];
+    let html = '';
+    for (const dt of [...typeOrder, ...Object.keys(byType).filter(t => !typeOrder.includes(t))]) {
+      if (!byType[dt]) continue;
+      html += `<div class="px-5 py-2 bg-gray-50 border-b flex items-center gap-2">
+        <span class="dt-${dt} px-2 py-0.5 rounded text-xs font-medium">${DT_ICON[dt]||'📄'} ${dt.charAt(0).toUpperCase()+dt.slice(1)}</span>
+        <span class="text-xs text-gray-400">${byType[dt].length} Datei(en)</span>
+      </div>`;
+      byType[dt].forEach(f => {
+        html += `<div class="flex items-center justify-between px-5 py-3 hover:bg-gray-50 border-b border-gray-50 last:border-0">
+          <div class="flex items-center gap-3">
+            <span class="text-lg">${FILE_ICON[f.suffix]||'📄'}</span>
+            <div>
+              <div class="text-sm font-medium text-gray-800">${f.name}</div>
+              <div class="text-xs text-gray-400">${fmt(f.size)} · ${f.suffix.toUpperCase()}</div>
+            </div>
+          </div>
+          <button onclick="deleteDoc('${f.rel_path}')"
+                  class="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded hover:bg-red-50 transition-colors">🗑️</button>
+        </div>`;
+      });
+    }
+    list.innerHTML = html;
+  } catch(e) {
+    list.innerHTML = `<p class="px-5 py-4 text-sm text-red-500">Fehler: ${e.message}</p>`;
+  }
+}
+
+async function handleDrop(event) {
+  event.preventDefault();
+  document.getElementById('dropzone').classList.remove('drop-active');
+  await uploadFiles(event.dataTransfer.files);
+}
+async function uploadFiles(fileList) {
+  const status = document.getElementById('upload-status');
+  status.className = 'mb-4 p-3 rounded-lg text-sm bg-blue-50 text-blue-700';
+  status.classList.remove('hidden');
+  status.textContent = `Lade ${fileList.length} Datei(en) hoch (Typ: ${selectedDocType})…`;
+  const fd = new FormData();
+  for (const f of fileList) fd.append('files', f);
+  try {
+    const r = await fetch(`/api/documents?doc_type=${selectedDocType}`, { method: 'POST', body: fd });
+    const data = await r.json();
+    const ok = data.uploaded?.length || 0;
+    const err = data.errors?.length || 0;
+    status.className = ok > 0
+      ? 'mb-4 p-3 rounded-lg text-sm bg-green-50 text-green-700'
+      : 'mb-4 p-3 rounded-lg text-sm bg-red-50 text-red-700';
+    status.textContent = `✓ ${ok} Datei(en) als "${selectedDocType}" hochgeladen${err > 0 ? ` · ${err} Fehler: ${data.errors.join(', ')}` : ''}`;
+    loadDocuments();
+  } catch(e) {
+    status.className = 'mb-4 p-3 rounded-lg text-sm bg-red-50 text-red-700';
+    status.textContent = `Fehler: ${e.message}`;
+  }
+}
+async function deleteDoc(relPath) {
+  if (!confirm(`"${relPath}" wirklich löschen?`)) return;
+  try {
+    await api('DELETE', `/api/documents/${encodeURIComponent(relPath)}`);
+    loadDocuments();
+  } catch(e) { alert(`Fehler: ${e.message}`); }
+}
+
+// ─── Config ───────────────────────────────────────────────────────────────
+async function loadConfig() {
+  try {
+    const { yaml } = await api('GET', '/api/config');
+    document.getElementById('config-editor').value = yaml;
+    document.getElementById('config-status').textContent = '';
+  } catch(e) { document.getElementById('config-status').textContent = `Fehler: ${e.message}`; }
+}
+async function saveConfig() {
+  const yaml = document.getElementById('config-editor').value;
+  const status = document.getElementById('config-status');
+  try {
+    await api('POST', '/api/config', { yaml });
+    status.className = 'text-sm ml-2 text-green-600';
+    status.textContent = '✓ Gespeichert';
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  } catch(e) {
+    status.className = 'text-sm ml-2 text-red-600';
+    status.textContent = `Fehler: ${e.message}`;
+  }
+}
+
+// ─── Build / Tasks ────────────────────────────────────────────────────────
+let currentEventSource = null;
+const TASK_BTNS = ['btn-ingest','btn-build','btn-pitch','btn-validate','btn-wipe'];
+const TASK_LABELS = {ingest:'🔍 Ingest',build:'🔨 Build',pitch:'🎯 Pitch',validate:'✅ Validate'};
+
+async function runTask(taskName) {
+  if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
+  TASK_BTNS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=true; });
+
+  const bar    = document.getElementById('task-statusbar');
+  const spinner = document.getElementById('task-spinner');
+  const label  = document.getElementById('task-label');
+  const badge  = document.getElementById('task-status-badge');
+
+  bar.classList.remove('hidden');
+  spinner.classList.remove('hidden');
+  label.textContent = TASK_LABELS[taskName] || taskName;
+  badge.className = 'ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700';
+  badge.textContent = 'läuft…';
+  appendLog(`\n▶ Starte ${taskName}…`, 'INFO');
+
+  try {
+    const body = {
+      reset:           taskName === 'ingest'  && document.getElementById('opt-reset-index').checked,
+      skip_literature: taskName === 'build'   && document.getElementById('opt-skip-literature').checked,
+    };
+    const { task_id } = await api('POST', `/api/tasks/${taskName}`, body);
+    streamTask(task_id, taskName, badge, spinner);
+  } catch(e) {
+    appendLog(`Fehler beim Starten: ${e.message}`, 'ERROR');
+    TASK_BTNS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=false; });
+    badge.className = 'ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700';
+    badge.textContent = 'Fehler';
+    spinner.classList.add('hidden');
+  }
+}
+
+function streamTask(taskId, taskName, badge, spinner) {
+  const es = new EventSource(`/api/tasks/${taskId}/stream`);
+  currentEventSource = es;
+  es.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    if (data.type === 'ping') return;
+    if (data.type === 'done') {
+      es.close(); currentEventSource = null;
+      TASK_BTNS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=false; });
+      spinner.classList.add('hidden');
+      if (data.status === 'done') {
+        badge.className = 'ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700';
+        badge.textContent = '✓ Fertig';
+        appendLog(`\n✓ ${taskName} abgeschlossen.`, 'INFO');
+        if (taskName === 'build' || taskName === 'pitch') loadReports();
+      } else {
+        badge.className = 'ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700';
+        badge.textContent = '✗ Fehler';
+      }
+      return;
+    }
+    if (data.type === 'log') appendLog(data.msg, data.level || 'INFO');
+  };
+  es.onerror = function() {
+    es.close(); currentEventSource = null;
+    TASK_BTNS.forEach(id => { const el=document.getElementById(id); if(el) el.disabled=false; });
+    spinner.classList.add('hidden');
+    badge.className = 'ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700';
+    badge.textContent = 'Verbindung unterbrochen';
+    appendLog('SSE unterbrochen.', 'WARNING');
+  };
+}
+function appendLog(msg, level) {
+  const log = document.getElementById('log-output');
+  const placeholder = log.querySelector('span.text-gray-600');
+  if (placeholder) placeholder.remove();
+  const line = document.createElement('div');
+  line.className = `log-${level}`;
+  line.textContent = msg;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+function clearLog() {
+  document.getElementById('log-output').innerHTML = '<span class="text-gray-600">Bereit – starte einen Task.</span>';
+}
+async function confirmWipe() {
+  if (!confirm('Index wirklich löschen? Anschließend muss ein neuer Ingest durchgeführt werden.')) return;
+  try {
+    await api('POST', '/api/tasks/wipe-index');
+    appendLog('✓ Index gelöscht.', 'WARNING');
+    loadStatus();
+  } catch(e) { appendLog(`Fehler: ${e.message}`, 'ERROR'); }
+}
+async function confirmWipeAll() {
+  if (!confirm('Index UND alle Reports löschen? Nicht umkehrbar!')) return;
+  try {
+    await api('POST', '/api/tasks/wipe-all');
+    loadReports(); loadStatus();
+  } catch(e) { alert(`Fehler: ${e.message}`); }
+}
+
+// ─── Reports ──────────────────────────────────────────────────────────────
+async function loadReports() {
+  const listFull  = document.getElementById('report-list-full');
+  const listPitch = document.getElementById('report-list-pitch');
+  try {
+    const { files } = await api('GET', '/api/reports');
+    // Separate pitch from full reports
+    const pitchFiles = files.filter(f => f.name.includes('_Pitch.'));
+    const fullFiles  = files.filter(f => !f.name.includes('_Pitch.'));
+
+    renderReportGroup(fullFiles,  listFull,  'Noch keine Reports. Starte Build im Tab 🔨.');
+    renderReportGroup(pitchFiles, listPitch, 'Noch keine Kurzfassung. Starte Pitch im Tab 🔨.');
+  } catch(e) {
+    listFull.innerHTML  = `<p class="px-5 py-4 text-sm text-red-500">Fehler: ${e.message}</p>`;
+    listPitch.innerHTML = '';
+  }
+}
+function renderReportGroup(files, container, emptyMsg) {
+  if (!files.length) {
+    container.innerHTML = `<p class="px-5 py-6 text-sm text-gray-400 text-center">${emptyMsg}</p>`;
+    return;
+  }
+  // Group by base name
+  const byBase = {};
+  files.forEach(f => {
+    const base = f.name.replace(/\.(md|docx|pdf|bib|json)$/, '');
+    (byBase[base] = byBase[base] || []).push(f);
+  });
+  container.innerHTML = Object.entries(byBase).map(([base, fs]) => {
+    const mdFile = fs.find(f => f.name.endsWith('.md'));
+    const ts = fs[0]?.mtime;
+    const btns = fs.map(f => `
+      <a href="/api/reports/${encodeURIComponent(f.name)}" download
+         class="inline-flex items-center gap-1 text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors">
+        ${FILE_ICON[f.suffix]||'📄'} ${f.suffix.toUpperCase()} <span class="text-gray-400">${fmt(f.size)}</span>
+      </a>`).join('');
+    const previewBtn = mdFile
+      ? `<button onclick="previewReport('${mdFile.name}')" class="text-xs text-brand-600 hover:underline ml-1">👁 Vorschau</button>`
+      : '';
+    return `<div class="px-5 py-4 hover:bg-gray-50 border-b border-gray-100 last:border-0">
+      <div class="flex items-center justify-between mb-2">
+        <div class="font-medium text-sm text-gray-800">${base}</div>
+        <div class="text-xs text-gray-400">${fmtDate(ts)}</div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">${btns}${previewBtn}</div>
+    </div>`;
+  }).join('');
+}
+
+async function previewReport(filename) {
+  try {
+    const { content } = await api('GET', `/api/reports/${encodeURIComponent(filename)}/preview`);
+    document.getElementById('preview-title').textContent = filename;
+    document.getElementById('preview-content').innerHTML = simpleMarkdown(content);
+    document.getElementById('preview-container').classList.remove('hidden');
+    document.getElementById('preview-container').scrollIntoView({ behavior: 'smooth' });
+  } catch(e) { alert(`Vorschau-Fehler: ${e.message}`); }
+}
+function closePreview() {
+  document.getElementById('preview-container').classList.add('hidden');
+}
+
+// Minimal markdown renderer
+function simpleMarkdown(md) {
+  let h = md.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/```[\w]*\n([\s\S]*?)```/g,'<pre class="bg-gray-100 p-3 rounded text-xs overflow-x-auto my-2"><code>$1</code></pre>')
+    .replace(/^#### (.+)$/gm,'<h4 class="font-semibold text-sm mt-4 mb-1">$1</h4>')
+    .replace(/^### (.+)$/gm,'<h3 class="font-bold text-base mt-5 mb-2">$1</h3>')
+    .replace(/^## (.+)$/gm,'<h2 class="font-bold text-lg mt-6 mb-2 border-b pb-1">$1</h2>')
+    .replace(/^# (.+)$/gm,'<h1 class="font-bold text-xl mt-6 mb-3 text-brand-600">$1</h1>')
+    .replace(/^---$/gm,'<hr class="my-4 border-gray-200" />')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/`([^`]+)`/g,'<code class="bg-gray-100 px-1 rounded text-xs">$1</code>')
+    .replace(/^[-*] (.+)$/gm,'<li class="ml-4 list-disc">$1</li>')
+    .replace(/\n\n/g,'</p><p class="my-2">');
+  return `<p class="my-2">${h}</p>`;
+}
+
+// ─── Inline styles for buttons ────────────────────────────────────────────
+(function() {
+  const s = document.createElement('style');
+  s.textContent = `
+    .btn-primary { background:#4f46e5;color:white;padding:.5rem 1.25rem;border-radius:.5rem;font-size:.875rem;font-weight:500;transition:background .15s;cursor:pointer;border:none; }
+    .btn-primary:hover { background:#4338ca; }
+    .btn-secondary { background:white;color:#374151;padding:.5rem 1.25rem;border-radius:.5rem;font-size:.875rem;font-weight:500;border:1px solid #d1d5db;transition:background .15s;cursor:pointer; }
+    .btn-secondary:hover { background:#f9fafb; }
+    .btn-action { padding:.75rem 1rem;border-radius:.75rem;text-align:center;cursor:pointer;transition:all .15s;border:none; }
+    .btn-action:disabled { opacity:.5;cursor:not-allowed; }
+  `;
+  document.head.appendChild(s);
+})();
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+loadStatus();
+setInterval(() => {
+  api('GET', '/api/status').then(renderHeaderBadges).catch(() => {});
+}, 30000);
+</script>
+</body>
+</html>
