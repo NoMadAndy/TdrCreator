@@ -39,6 +39,9 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".doc", ".md", ".txt", ".rst", ".html", ".htm"}
 
+# Valid subfolders for source typing (must match parser.DOC_TYPE_FOLDERS)
+DOC_TYPE_SUBFOLDERS = {"intern", "schulung", "entwurf", "extern", "literatur"}
+
 # ---------------------------------------------------------------------------
 # Task registry (in-memory, single-user tool)
 # ---------------------------------------------------------------------------
@@ -157,6 +160,9 @@ DEFAULT_CONFIG = {
 def _ensure_dirs() -> None:
     for d in (DATA_DIR, DOCS_DIR, OUT_DIR):
         d.mkdir(parents=True, exist_ok=True)
+    # Create doc_type subfolders so they show up in the UI immediately
+    for subfolder in DOC_TYPE_SUBFOLDERS:
+        (DOCS_DIR / subfolder).mkdir(exist_ok=True)
 
 
 def _ensure_config() -> None:
@@ -308,22 +314,46 @@ async def save_config(request: Request):
 
 @app.get("/api/documents")
 async def list_documents():
+    """List all uploaded documents, grouped by doc_type subfolder."""
     if not DOCS_DIR.exists():
-        return {"files": []}
+        return {"files": [], "subfolders": list(DOC_TYPE_SUBFOLDERS)}
     files = []
-    for f in sorted(DOCS_DIR.iterdir()):
-        if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS:
-            files.append({
-                "name": f.name,
-                "size": f.stat().st_size,
-                "suffix": f.suffix.lower(),
-            })
-    return {"files": files}
+    # Walk recursively so we pick up subfolders
+    for f in sorted(DOCS_DIR.rglob("*")):
+        if not f.is_file() or f.suffix.lower() not in SUPPORTED_EXTENSIONS:
+            continue
+        # Determine doc_type from immediate parent folder name
+        parent = f.parent
+        if parent == DOCS_DIR:
+            doc_type = "allgemein"
+            rel_path = f.name
+        else:
+            folder_name = parent.name.lower()
+            doc_type = folder_name if folder_name in DOC_TYPE_SUBFOLDERS else "allgemein"
+            rel_path = f"{parent.name}/{f.name}"
+        files.append({
+            "name": f.name,
+            "rel_path": rel_path,   # used for delete
+            "doc_type": doc_type,
+            "size": f.stat().st_size,
+            "suffix": f.suffix.lower(),
+        })
+    return {"files": files, "subfolders": sorted(DOC_TYPE_SUBFOLDERS)}
 
 
 @app.post("/api/documents")
-async def upload_documents(files: list[UploadFile] = File(...)):
-    DOCS_DIR.mkdir(parents=True, exist_ok=True)
+async def upload_documents(
+    files: list[UploadFile] = File(...),
+    request: Request = None,
+):
+    """Upload documents. Pass ?doc_type=intern to place in the matching subfolder."""
+    doc_type = (request.query_params.get("doc_type", "allgemein") if request else "allgemein").lower()
+    if doc_type in DOC_TYPE_SUBFOLDERS:
+        target_dir = DOCS_DIR / doc_type
+    else:
+        target_dir = DOCS_DIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+
     uploaded = []
     errors = []
     for uf in files:
@@ -331,24 +361,31 @@ async def upload_documents(files: list[UploadFile] = File(...)):
             continue
         suffix = Path(uf.filename).suffix.lower()
         if suffix not in SUPPORTED_EXTENSIONS:
-            errors.append(f"{uf.filename}: unsupported file type")
+            errors.append(f"{uf.filename}: nicht unterstützter Dateityp")
             continue
-        dest = DOCS_DIR / uf.filename
+        safe_name = Path(uf.filename).name  # strip any path components
+        dest = target_dir / safe_name
         content = await uf.read()
         dest.write_bytes(content)
-        uploaded.append({"name": uf.filename, "size": len(content)})
+        uploaded.append({"name": safe_name, "doc_type": doc_type, "size": len(content)})
     return {"uploaded": uploaded, "errors": errors}
 
 
-@app.delete("/api/documents/{filename}")
-async def delete_document(filename: str):
-    # Prevent path traversal
-    safe_name = Path(filename).name
-    target = DOCS_DIR / safe_name
+@app.delete("/api/documents/{rel_path:path}")
+async def delete_document(rel_path: str):
+    """Delete a document. rel_path may be 'filename.pdf' or 'subfolder/filename.pdf'."""
+    # Prevent path traversal: only allow one level of subfolder
+    parts = Path(rel_path).parts
+    if len(parts) == 1:
+        target = DOCS_DIR / parts[0]
+    elif len(parts) == 2 and parts[0] in DOC_TYPE_SUBFOLDERS | {"allgemein"}:
+        target = DOCS_DIR / parts[0] / parts[1]
+    else:
+        raise HTTPException(status_code=400, detail="Ungültiger Pfad")
     if not target.exists():
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail="Datei nicht gefunden")
     target.unlink()
-    return {"ok": True, "deleted": safe_name}
+    return {"ok": True, "deleted": str(target.relative_to(DOCS_DIR))}
 
 
 # ---------------------------------------------------------------------------
@@ -655,6 +692,54 @@ def _do_validate(task: Task) -> None:
             import asyncio as _as
             # Can't await here; use logging so the handler picks it up
             logging.getLogger("tdrcreator.validate").warning(msg)
+
+
+# ── Pitch ──────────────────────────────────────────────────────────────────
+
+@app.post("/api/tasks/pitch")
+async def start_pitch():
+    task = _create_task("pitch")
+    loop = asyncio.get_event_loop()
+    asyncio.create_task(_run_pitch(task, loop))
+    return {"task_id": task.task_id}
+
+
+async def _run_pitch(task: Task, loop: asyncio.AbstractEventLoop) -> None:
+    handler = _attach_queue_handler(task, loop)
+    try:
+        await asyncio.to_thread(_do_pitch, task)
+        task.status = "done"
+    except Exception as e:
+        task.status = "error"
+        task.error = str(e)
+        await task.messages.put({"type": "log", "level": "ERROR", "msg": f"Fehler: {e}"})
+    finally:
+        _detach_handler(handler)
+        await task.messages.put(None)
+
+
+def _do_pitch(task: Task) -> None:
+    from tdrcreator.retrieval.index import ChunkIndex
+    from tdrcreator.report.builder import build_pitch
+    from tdrcreator.report.exporter import export_markdown, export_docx
+
+    cfg = _load_config()
+
+    if not ChunkIndex.exists(INDEX_DIR):
+        raise RuntimeError("Kein Index gefunden – bitte zuerst Ingest ausführen.")
+
+    idx = ChunkIndex.load(INDEX_DIR)
+    artifact = build_pitch(config=cfg, index=idx, ext_refs=[])
+
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    safe_title = cfg.project_title.replace(" ", "_").replace("/", "-")
+    pitch_path = OUT_DIR / f"{safe_title}_Pitch.md"
+    export_markdown(artifact.markdown, pitch_path)
+
+    if cfg.output.docx:
+        export_docx(artifact.markdown, OUT_DIR / f"{safe_title}_Pitch.docx")
+
+    task.result = {"word_count": artifact.word_count, "file": pitch_path.name}
 
 
 # ── Wipe index ─────────────────────────────────────────────────────────────

@@ -204,3 +204,106 @@ def _section_guidance(key: str, language: str) -> str:
     }
     guides = guides_de if language == "de" else guides_en
     return guides.get(key, "Schreibe den Abschnittsinhalt.")
+
+
+# ---------------------------------------------------------------------------
+# Pitch prompt
+# ---------------------------------------------------------------------------
+
+def build_pitch_prompt(
+    project_title: str,
+    topic: str,
+    audience: str,
+    language: str,
+    tone: str,
+    chunks: "list[RetrievedChunk]",
+    ext_refs: "list[Reference]",
+) -> str:
+    """Build the LLM prompt for the Pitch / Kurzfassung document."""
+    lang_name = "Deutsch" if language == "de" else "English"
+
+    ctx_lines: list[str] = []
+    for rc in chunks:
+        c = rc.chunk
+        ctx_lines.append(f"[SRC:{c.chunk_id}] {c.text}")
+    context_block = "\n\n---\n\n".join(ctx_lines) if ctx_lines else "(keine Quellen)"
+
+    ext_lines: list[str] = []
+    for ref in ext_refs:
+        ext_lines.append(
+            f"[REF:{ref.ref_id.replace('REF:', '')}] {ref.title} "
+            f"({', '.join(a.last for a in ref.authors[:2])} et al., {ref.year or 'n.d.'})"
+        )
+    refs_block = "\n".join(ext_lines) if ext_lines else "(keine externen Quellen)"
+
+    if language == "de":
+        structure = """Erstelle eine strukturierte Kurzfassung (Pitch) mit **genau diesen Abschnitten** in Markdown:
+
+## [Einzeiler – Was ist das Projekt und warum ist es wichtig?]
+
+### Ausgangslage & Problem
+- [3–4 prägnante Bullet Points: Was war die Ausgangssituation? Welches Problem soll gelöst werden?]
+
+### Ansatz & Lösung
+- [3–4 Bullet Points: Welcher Ansatz wurde gewählt? Was sind die Kernelemente der Lösung?]
+
+### Kernergebnisse
+- [3–5 Bullet Points: Was wurde konkret erreicht? Welche messbaren Ergebnisse gibt es?]
+
+### Wichtigste Entscheidungen
+- [2–3 Bullet Points: Welche Schlüsselentscheidungen wurden getroffen und warum?]
+
+### Risiken & Maßnahmen
+- [2–3 Bullet Points: Was sind die wesentlichen Risiken und welche Gegenmaßnahmen gibt es?]
+
+### Empfehlungen & Nächste Schritte
+- [3–4 Bullet Points: Was wird empfohlen? Was sind die nächsten konkreten Schritte?]
+
+**Wichtig:** Jeder Bullet Point soll eigenständig und prägnant sein (1–2 Sätze max). Kein Fließtext. Geeignet für eine 5-Minuten-Präsentation vor {audience}."""
+    else:
+        structure = """Create a structured executive pitch summary with **exactly these sections** in Markdown:
+
+## [One-liner – What is this project and why does it matter?]
+
+### Problem Statement
+- [3–4 concise bullet points: What was the situation? What problem needs to be solved?]
+
+### Approach & Solution
+- [3–4 bullet points: What approach was chosen? What are the core elements?]
+
+### Key Results
+- [3–5 bullet points: What was achieved? What measurable outcomes exist?]
+
+### Key Decisions
+- [2–3 bullet points: What critical decisions were made and why?]
+
+### Risks & Mitigation
+- [2–3 bullet points: What are the main risks and how are they mitigated?]
+
+### Recommendations & Next Steps
+- [3–4 bullet points: What is recommended? What are the concrete next steps?]
+
+**Important:** Each bullet point must be standalone and concise (1–2 sentences max). No prose paragraphs. Suitable for a 5-minute presentation to {audience}."""
+
+    structure = structure.format(audience=audience)
+
+    return f"""Du bist ein technischer Redakteur. Erstelle eine Pitch-Kurzfassung für den folgenden Transfer-Report.
+
+Projekt: {project_title}
+Thema: {topic}
+Zielgruppe: {audience}
+Sprache: {lang_name}
+Ton: {tone}
+
+=== KONTEXT AUS QUELLEN (RAG) ===
+{context_block}
+
+=== EXTERNE LITERATUR ===
+{refs_block}
+
+=== AUFGABE ===
+{structure}
+
+Schreibe jetzt die Kurzfassung auf {lang_name}. Beginne direkt mit dem Einzeiler nach "## ".
+Halte die Gesamtlänge auf 350–500 Wörter.
+"""

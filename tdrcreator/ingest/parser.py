@@ -16,6 +16,30 @@ from tdrcreator.security.logger import get_logger, hash_path
 
 _log = get_logger("ingest.parser")
 
+# Folder names that carry semantic meaning for the source type.
+# Files placed directly in docs/ (no subfolder) → "allgemein".
+DOC_TYPE_FOLDERS: dict[str, str] = {
+    "intern":    "intern",       # internal project docs, system docs
+    "schulung":  "schulung",     # training / course materials
+    "entwurf":   "entwurf",      # user's own draft / concept notes
+    "extern":    "extern",       # external references added manually
+    "literatur": "literatur",    # scientific papers added manually
+}
+
+DOC_TYPE_LABELS_DE: dict[str, str] = {
+    "intern":    "Interne Dokumentation",
+    "schulung":  "Schulungsunterlagen",
+    "entwurf":   "Eigener Entwurf",
+    "extern":    "Externe Quellen",
+    "literatur": "Literatur",
+    "allgemein": "Allgemein",
+}
+
+
+def _detect_doc_type(path: Path) -> str:
+    """Derive doc_type from the immediate parent folder name."""
+    return DOC_TYPE_FOLDERS.get(path.parent.name.lower(), "allgemein")
+
 
 @dataclass
 class Page:
@@ -177,12 +201,19 @@ def parse_document(path: Path, use_ocr: bool = False) -> list[Page]:
     """Parse any supported document type and return its pages."""
     suffix = path.suffix.lower()
     if suffix == ".pdf":
-        return parse_pdf(path, use_ocr=use_ocr)
-    parser = SUFFIX_MAP.get(suffix)
-    if parser is None:
-        _log.warning(f"Unsupported file type: suffix={suffix!r} – skipping")
-        return []
-    return parser(path)
+        pages = parse_pdf(path, use_ocr=use_ocr)
+    else:
+        parser_fn = SUFFIX_MAP.get(suffix)
+        if parser_fn is None:
+            _log.warning(f"Unsupported file type: suffix={suffix!r} – skipping")
+            return []
+        pages = parser_fn(path)
+
+    # Stamp every page with the folder-derived doc_type
+    doc_type = _detect_doc_type(path)
+    for p in pages:
+        p.metadata["doc_type"] = doc_type
+    return pages
 
 
 def discover_documents(docs_dir: Path) -> list[Path]:

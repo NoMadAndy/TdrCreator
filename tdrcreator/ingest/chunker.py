@@ -26,6 +26,12 @@ class Chunk:
     page_num: int
     char_offset: int     # character offset within the page text
     text: str
+    doc_type: str = "allgemein"  # folder-based source type (intern/schulung/entwurf/extern/…)
+
+    def __setstate__(self, state: dict) -> None:
+        """Backward-compatible unpickling: old indices lack doc_type."""
+        state.setdefault("doc_type", "allgemein")
+        self.__dict__.update(state)
 
 
 def _chunk_id(text: str) -> str:
@@ -58,6 +64,8 @@ def chunk_page(
     current_len = 0
     offset = 0
 
+    _doc_type = page.metadata.get("doc_type", "allgemein")
+
     def flush(char_offset: int) -> None:
         chunk_text = " ".join(current_chars).strip()
         if chunk_text:
@@ -68,6 +76,7 @@ def chunk_page(
                 page_num=page.page_num,
                 char_offset=char_offset,
                 text=chunk_text,
+                doc_type=_doc_type,
             ))
 
     sentence_offset = 0
