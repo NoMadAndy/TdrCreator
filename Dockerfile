@@ -16,7 +16,7 @@ WORKDIR /app
 # Install Python deps first (layer caching)
 COPY pyproject.toml .
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir ".[webapp]"
+    && pip install --no-cache-dir -e ".[webapp]"
 
 # Copy application source
 COPY tdrcreator/ tdrcreator/
