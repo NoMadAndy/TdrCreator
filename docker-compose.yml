@@ -53,8 +53,14 @@ services:
     #         - driver: nvidia
     #           count: all
     #           capabilities: [gpu]
+    #healthcheck:
+    #  test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+    #  interval: 20s
+    #  timeout: 10s
+    #  start_period: 30s
+    #  retries: 5
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
       interval: 20s
       timeout: 10s
       start_period: 30s
@@ -65,10 +71,18 @@ services:
     image: ollama/ollama:latest
     container_name: ollama-init
     restart: "no"
+    #entrypoint: >
+    #  sh -c "
+    #    echo 'Waiting for Ollama to be ready...' &&
+    #    until curl -sf http://ollama:11434/api/tags; do sleep 2; done &&
+    #    echo 'Pulling model: ${OLLAMA_MODEL:-llama3}...' &&
+    #    ollama pull ${OLLAMA_MODEL:-llama3} &&
+    #    echo 'Model ready.'
+    #  "
     entrypoint: >
       sh -c "
         echo 'Waiting for Ollama to be ready...' &&
-        until curl -sf http://ollama:11434/api/tags; do sleep 2; done &&
+        until ollama list >/dev/null 2>&1; do sleep 2; done &&
         echo 'Pulling model: ${OLLAMA_MODEL:-llama3}...' &&
         ollama pull ${OLLAMA_MODEL:-llama3} &&
         echo 'Model ready.'
