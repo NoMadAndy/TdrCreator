@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.egg-info
+.eggs
+dist
+build
+*.egg
+
+# Virtual environments
+.venv
+venv
+env
+
+# Test artifacts
+.pytest_cache
+.coverage
+htmlcov
+
+# Data & generated files (mounted as volumes)
+data/
+.tdr_index/
+out/
+
+# Development files
+*.md
+!README.md
+Prompt.md
+docs/
+sample_docs/
+tests/
+
+# Editor / OS
+.DS_Store
+.idea
+.vscode
+*.swp
+*.swo
+
+# Secrets
+.env
+*.env

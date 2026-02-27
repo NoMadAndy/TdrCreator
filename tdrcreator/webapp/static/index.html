@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TdrCreator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 600: '#4f46e5', 700: '#4338ca', 100: '#e0e7ff' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    #log-output { font-family: 'Courier New', monospace; font-size: 0.8rem; }
+    .log-INFO    { color: #d1fae5; }
+    .log-WARNING { color: #fde68a; }
+    .log-ERROR   { color: #fca5a5; }
+    .log-METRIC  { color: #93c5fd; }
+    .log-DEBUG   { color: #9ca3af; }
+    .drop-active { border-color: #4f46e5 !important; background: #eef2ff !important; }
+    .tab-active  { border-bottom: 2px solid #4f46e5; color: #4f46e5; font-weight: 600; }
+    .fade-in     { animation: fadeIn .2s ease-in; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800">
+
+<!-- ═══════════════════════════════════════════════ HEADER ═════════ -->
+<header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+  <div class="flex items-center gap-3">
+    <span class="text-2xl">📄</span>
+    <span class="font-bold text-xl text-brand-600">TdrCreator</span>
+    <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">🔒 Lokal & Privat</span>
+  </div>
+  <div class="flex items-center gap-4 text-sm">
+    <div id="llm-badge" class="flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full">
+      <span id="llm-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
+      <span id="llm-label">LLM: prüfe…</span>
+    </div>
+    <div id="index-badge" class="flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full">
+      <span class="text-gray-500">Index:</span>
+      <span id="index-label" class="font-mono">–</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════ TABS ═══════════ -->
+<nav class="bg-white border-b border-gray-200 px-6 flex gap-0">
+  <button onclick="showTab('dashboard')" id="tab-dashboard" class="tab-btn tab-active px-5 py-3 text-sm hover:text-brand-600 transition-colors">
+    📊 Dashboard
+  </button>
+  <button onclick="showTab('documents')" id="tab-documents" class="tab-btn px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors">
+    📁 Dokumente
+  </button>
+  <button onclick="showTab('config')" id="tab-config" class="tab-btn px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors">
+    ⚙️ Konfiguration
+  </button>
+  <button onclick="showTab('build')" id="tab-build" class="tab-btn px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors">
+    🔨 Build
+  </button>
+  <button onclick="showTab('reports')" id="tab-reports" class="tab-btn px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors">
+    📋 Reports
+  </button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════ CONTENT ════════ -->
+<main class="max-w-6xl mx-auto px-6 py-8">
+
+  <!-- ─── DASHBOARD ─── -->
+  <div id="panel-dashboard" class="panel fade-in">
+    <h2 class="text-xl font-semibold mb-6">Status</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8" id="status-cards">
+      <!-- filled by JS -->
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <h3 class="font-semibold mb-3 text-gray-700">Schnellstart</h3>
+        <p class="text-sm text-gray-500 mb-4">Dokumente hochladen → Ingest → Build → Report herunterladen</p>
+        <div class="flex flex-col gap-2">
+          <button onclick="showTab('documents')" class="btn-secondary text-sm">📁 Dokumente hochladen</button>
+          <button onclick="showTab('build')" class="btn-secondary text-sm">🔨 Build starten</button>
+          <button onclick="showTab('reports')" class="btn-secondary text-sm">📋 Reports ansehen</button>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <h3 class="font-semibold mb-3 text-gray-700">Privacy-Status</h3>
+        <ul class="text-sm space-y-2">
+          <li class="flex items-center gap-2"><span class="text-green-500">✓</span> LLM läuft lokal (Ollama)</li>
+          <li class="flex items-center gap-2"><span class="text-green-500">✓</span> Embeddings lokal (sentence-transformers)</li>
+          <li class="flex items-center gap-2"><span class="text-green-500">✓</span> Index lokal (FAISS)</li>
+          <li class="flex items-center gap-2"><span class="text-green-500">✓</span> Logs enthalten keine Rohtexte</li>
+          <li id="lit-privacy" class="flex items-center gap-2"><span class="text-yellow-500">○</span> Externe Literatur: nur Keywords</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── DOKUMENTE ─── -->
+  <div id="panel-documents" class="panel hidden fade-in">
+    <h2 class="text-xl font-semibold mb-6">Dokumente</h2>
+
+    <!-- Drop zone -->
+    <div id="dropzone"
+         class="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center mb-6 cursor-pointer transition-all hover:border-brand-600"
+         ondragover="event.preventDefault(); this.classList.add('drop-active')"
+         ondragleave="this.classList.remove('drop-active')"
+         ondrop="handleDrop(event)"
+         onclick="document.getElementById('file-input').click()">
+      <div class="text-4xl mb-3">📂</div>
+      <p class="text-gray-600 font-medium">Dateien hier ablegen oder klicken zum Auswählen</p>
+      <p class="text-xs text-gray-400 mt-2">Unterstützt: PDF, DOCX, MD, TXT, HTML, RST</p>
+      <input type="file" id="file-input" multiple accept=".pdf,.docx,.doc,.md,.txt,.rst,.html,.htm"
+             class="hidden" onchange="uploadFiles(this.files)" />
+    </div>
+
+    <div id="upload-status" class="hidden mb-4 p-3 rounded-lg text-sm"></div>
+
+    <!-- File list -->
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+        <span class="font-medium text-sm text-gray-700">Hochgeladene Dokumente</span>
+        <button onclick="loadDocuments()" class="text-xs text-brand-600 hover:underline">↻ Aktualisieren</button>
+      </div>
+      <div id="doc-list" class="divide-y divide-gray-100">
+        <p class="px-5 py-6 text-sm text-gray-400 text-center">Lade…</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── KONFIGURATION ─── -->
+  <div id="panel-config" class="panel hidden fade-in">
+    <h2 class="text-xl font-semibold mb-6">Konfiguration</h2>
+    <div class="bg-white rounded-xl border border-gray-200 p-6">
+      <p class="text-sm text-gray-500 mb-4">
+        Bearbeite die <code class="bg-gray-100 px-1 rounded">config.yaml</code> direkt.
+        Alle Pfade werden in der Docker-Umgebung automatisch gesetzt.
+      </p>
+      <textarea id="config-editor"
+                class="w-full h-[520px] font-mono text-sm bg-gray-900 text-green-300 rounded-lg p-4 resize-y focus:outline-none focus:ring-2 focus:ring-brand-600"
+                spellcheck="false"
+                placeholder="Lade Konfiguration…"></textarea>
+      <div class="flex items-center gap-3 mt-4">
+        <button onclick="saveConfig()" class="btn-primary">💾 Speichern</button>
+        <button onclick="loadConfig()" class="btn-secondary">↻ Neu laden</button>
+        <span id="config-status" class="text-sm ml-2"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── BUILD ─── -->
+  <div id="panel-build" class="panel hidden fade-in">
+    <h2 class="text-xl font-semibold mb-6">Build</h2>
+
+    <!-- Action buttons -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+      <button onclick="runTask('ingest')" id="btn-ingest"
+              class="btn-action bg-blue-600 hover:bg-blue-700 text-white">
+        <span class="text-lg">🔍</span><br>
+        <span class="text-sm font-medium">Ingest</span>
+        <span class="text-xs opacity-80 block">Dokumente indexieren</span>
+      </button>
+      <button onclick="runTask('build')" id="btn-build"
+              class="btn-action bg-brand-600 hover:bg-brand-700 text-white">
+        <span class="text-lg">🔨</span><br>
+        <span class="text-sm font-medium">Build</span>
+        <span class="text-xs opacity-80 block">Report generieren</span>
+      </button>
+      <button onclick="runTask('validate')" id="btn-validate"
+              class="btn-action bg-emerald-600 hover:bg-emerald-700 text-white">
+        <span class="text-lg">✅</span><br>
+        <span class="text-sm font-medium">Validate</span>
+        <span class="text-xs opacity-80 block">Zitate prüfen</span>
+      </button>
+      <button onclick="confirmWipe()" id="btn-wipe"
+              class="btn-action bg-red-50 hover:bg-red-100 text-red-600 border border-red-200">
+        <span class="text-lg">🗑️</span><br>
+        <span class="text-sm font-medium">Wipe Index</span>
+        <span class="text-xs opacity-80 block">Index löschen</span>
+      </button>
+    </div>
+
+    <!-- Options row -->
+    <div class="bg-white rounded-xl border border-gray-200 p-4 mb-4 flex items-center gap-6 text-sm">
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" id="opt-reset-index" class="rounded"> Index zurücksetzen vor Ingest
+      </label>
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" id="opt-skip-literature" class="rounded"> Externe Literatur überspringen
+      </label>
+    </div>
+
+    <!-- Status bar -->
+    <div id="task-statusbar" class="hidden bg-white rounded-xl border border-gray-200 px-5 py-3 mb-4 flex items-center gap-3 text-sm">
+      <span id="task-spinner" class="animate-spin">⟳</span>
+      <span id="task-label" class="font-medium"></span>
+      <span id="task-status-badge" class="ml-auto px-2 py-0.5 rounded-full text-xs font-medium"></span>
+    </div>
+
+    <!-- Log output -->
+    <div class="bg-gray-950 rounded-xl overflow-hidden border border-gray-800">
+      <div class="px-4 py-2 border-b border-gray-800 flex items-center justify-between">
+        <span class="text-gray-400 text-xs font-mono">Build Log</span>
+        <button onclick="clearLog()" class="text-gray-500 hover:text-gray-300 text-xs">✕ leeren</button>
+      </div>
+      <div id="log-output"
+           class="h-80 overflow-y-auto p-4 text-gray-300 whitespace-pre-wrap"
+           style="scroll-behavior: smooth;">
+        <span class="text-gray-600">Bereit. Starte einen Task um den Log zu sehen…</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── REPORTS ─── -->
+  <div id="panel-reports" class="panel hidden fade-in">
+    <h2 class="text-xl font-semibold mb-6">Reports</h2>
+
+    <div class="flex gap-3 mb-6">
+      <button onclick="loadReports()" class="btn-secondary text-sm">↻ Aktualisieren</button>
+      <button onclick="confirmWipeAll()" class="text-sm text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition-colors">
+        🗑️ Alles löschen
+      </button>
+    </div>
+
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden mb-6">
+      <div id="report-list">
+        <p class="px-5 py-6 text-sm text-gray-400 text-center">Lade…</p>
+      </div>
+    </div>
+
+    <!-- Markdown preview -->
+    <div id="preview-container" class="hidden">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold text-gray-700" id="preview-title"></h3>
+        <button onclick="closePreview()" class="text-gray-400 hover:text-gray-600 text-sm">✕ Schließen</button>
+      </div>
+      <div id="preview-content"
+           class="bg-white rounded-xl border border-gray-200 p-8 prose max-w-none overflow-y-auto max-h-[70vh] text-sm">
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════ SCRIPTS ════════ -->
+<script>
+// ────────────────────────────────────────────────────────────────────
+// Utils
+// ────────────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    const txt = await r.text();
+    throw new Error(`${r.status} ${txt}`);
+  }
+  return r.json();
+}
+
+function fmt(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024*1024) return `${(bytes/1024).toFixed(1)} KB`;
+  return `${(bytes/1024/1024).toFixed(1)} MB`;
+}
+
+function fmtDate(ts) {
+  if (!ts) return '';
+  return new Date(ts * 1000).toLocaleString('de-DE');
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Tabs
+// ────────────────────────────────────────────────────────────────────
+const tabLoaders = {
+  dashboard: loadStatus,
+  documents: loadDocuments,
+  config:    loadConfig,
+  build:     () => {},
+  reports:   loadReports,
+};
+
+function showTab(name) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('tab-active');
+    b.classList.add('text-gray-500');
+  });
+  document.getElementById(`panel-${name}`).classList.remove('hidden');
+  document.getElementById(`panel-${name}`).classList.add('fade-in');
+  const btn = document.getElementById(`tab-${name}`);
+  btn.classList.add('tab-active');
+  btn.classList.remove('text-gray-500');
+  if (tabLoaders[name]) tabLoaders[name]();
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Status / Dashboard
+// ────────────────────────────────────────────────────────────────────
+async function loadStatus() {
+  try {
+    const s = await api('GET', '/api/status');
+    renderStatusCards(s);
+    renderHeaderBadges(s);
+  } catch(e) {
+    document.getElementById('status-cards').innerHTML =
+      `<div class="col-span-3 text-red-500 text-sm">Fehler: ${e.message}</div>`;
+  }
+}
+
+function renderHeaderBadges(s) {
+  const dot   = document.getElementById('llm-dot');
+  const label = document.getElementById('llm-label');
+  const idxLbl = document.getElementById('index-label');
+
+  if (s.llm?.connected) {
+    dot.className = 'w-2 h-2 rounded-full bg-green-500';
+    label.textContent = `LLM: ${s.llm.model}${s.llm.model_available ? '' : ' ⚠'}`;
+  } else {
+    dot.className = 'w-2 h-2 rounded-full bg-red-400';
+    label.textContent = 'LLM: offline';
+  }
+  idxLbl.textContent = s.index?.exists
+    ? `${s.index.chunk_count} Chunks`
+    : 'leer';
+}
+
+function renderStatusCards(s) {
+  const llm = s.llm || {};
+  const idx = s.index || {};
+
+  const llmColor = llm.connected ? 'green' : 'red';
+  const llmIcon  = llm.connected ? '🟢' : '🔴';
+
+  const cards = [
+    {
+      icon: '🤖', label: 'LLM (Ollama)',
+      value: llm.connected ? llm.model : 'Nicht verbunden',
+      sub: llm.connected
+        ? (llm.model_available ? '✓ Modell verfügbar' : '⚠ Modell nicht geladen')
+        : (llm.error || 'Ollama nicht erreichbar'),
+      color: llm.connected ? 'green' : 'red'
+    },
+    {
+      icon: '🗄️', label: 'Vektorindex',
+      value: idx.exists ? `${idx.chunk_count} Chunks` : 'Kein Index',
+      sub: idx.exists ? `${idx.doc_count} Dokument(e)` : 'Bitte Ingest ausführen',
+      color: idx.exists ? 'blue' : 'gray'
+    },
+    {
+      icon: '📁', label: 'Dokumente / Reports',
+      value: `${s.docs_count || 0} Dokumente`,
+      sub: `${s.reports_count || 0} Report(s) generiert`,
+      color: 'indigo'
+    },
+  ];
+
+  document.getElementById('status-cards').innerHTML = cards.map(c => `
+    <div class="bg-white rounded-xl border border-gray-200 p-5">
+      <div class="flex items-center gap-3 mb-2">
+        <span class="text-2xl">${c.icon}</span>
+        <span class="text-sm text-gray-500 font-medium">${c.label}</span>
+      </div>
+      <div class="text-lg font-bold text-gray-800 mb-1">${c.value}</div>
+      <div class="text-xs text-gray-500">${c.sub}</div>
+    </div>
+  `).join('');
+
+  // Ollama model list
+  if (llm.models?.length) {
+    document.getElementById('lit-privacy').innerHTML =
+      `<span class="text-green-500">✓</span> Externe Literatur: nur Keywords`;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Documents
+// ────────────────────────────────────────────────────────────────────
+async function loadDocuments() {
+  const list = document.getElementById('doc-list');
+  try {
+    const { files } = await api('GET', '/api/documents');
+    if (!files.length) {
+      list.innerHTML = `<p class="px-5 py-6 text-sm text-gray-400 text-center">
+        Keine Dokumente. Dateien oben ablegen oder klicken.</p>`;
+      return;
+    }
+    list.innerHTML = files.map(f => `
+      <div class="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors">
+        <div class="flex items-center gap-3">
+          <span class="text-lg">${fileIcon(f.suffix)}</span>
+          <div>
+            <div class="text-sm font-medium text-gray-800">${f.name}</div>
+            <div class="text-xs text-gray-400">${fmt(f.size)} · ${f.suffix.toUpperCase()}</div>
+          </div>
+        </div>
+        <button onclick="deleteDoc('${f.name}')"
+                class="text-red-400 hover:text-red-600 text-xs px-2 py-1 rounded hover:bg-red-50 transition-colors">
+          🗑️ Löschen
+        </button>
+      </div>
+    `).join('');
+  } catch(e) {
+    list.innerHTML = `<p class="px-5 py-4 text-sm text-red-500">Fehler: ${e.message}</p>`;
+  }
+}
+
+function fileIcon(suffix) {
+  const icons = {'.pdf':'📄','.docx':'📝','.doc':'📝','.md':'📋','.txt':'📃','.html':'🌐','.htm':'🌐','.rst':'📋'};
+  return icons[suffix] || '📄';
+}
+
+async function handleDrop(event) {
+  event.preventDefault();
+  document.getElementById('dropzone').classList.remove('drop-active');
+  await uploadFiles(event.dataTransfer.files);
+}
+
+async function uploadFiles(fileList) {
+  const status = document.getElementById('upload-status');
+  status.className = 'mb-4 p-3 rounded-lg text-sm bg-blue-50 text-blue-700';
+  status.classList.remove('hidden');
+  status.textContent = `Lade ${fileList.length} Datei(en) hoch…`;
+
+  const fd = new FormData();
+  for (const f of fileList) fd.append('files', f);
+
+  try {
+    const r = await fetch('/api/documents', { method: 'POST', body: fd });
+    const data = await r.json();
+    const ok = data.uploaded?.length || 0;
+    const err = data.errors?.length || 0;
+    status.className = ok > 0
+      ? 'mb-4 p-3 rounded-lg text-sm bg-green-50 text-green-700'
+      : 'mb-4 p-3 rounded-lg text-sm bg-red-50 text-red-700';
+    status.textContent = `✓ ${ok} Datei(en) hochgeladen${err > 0 ? ` · ${err} Fehler: ${data.errors.join(', ')}` : ''}`;
+    loadDocuments();
+  } catch(e) {
+    status.className = 'mb-4 p-3 rounded-lg text-sm bg-red-50 text-red-700';
+    status.textContent = `Fehler: ${e.message}`;
+  }
+}
+
+async function deleteDoc(name) {
+  if (!confirm(`"${name}" wirklich löschen?`)) return;
+  try {
+    await api('DELETE', `/api/documents/${encodeURIComponent(name)}`);
+    loadDocuments();
+  } catch(e) {
+    alert(`Fehler: ${e.message}`);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Config
+// ────────────────────────────────────────────────────────────────────
+async function loadConfig() {
+  try {
+    const { yaml } = await api('GET', '/api/config');
+    document.getElementById('config-editor').value = yaml;
+    document.getElementById('config-status').textContent = '';
+  } catch(e) {
+    document.getElementById('config-status').textContent = `Fehler: ${e.message}`;
+  }
+}
+
+async function saveConfig() {
+  const yaml = document.getElementById('config-editor').value;
+  const status = document.getElementById('config-status');
+  try {
+    await api('POST', '/api/config', { yaml });
+    status.className = 'text-sm ml-2 text-green-600';
+    status.textContent = '✓ Gespeichert';
+    setTimeout(() => { status.textContent = ''; }, 3000);
+  } catch(e) {
+    status.className = 'text-sm ml-2 text-red-600';
+    status.textContent = `Fehler: ${e.message}`;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Build / Tasks
+// ────────────────────────────────────────────────────────────────────
+let currentEventSource = null;
+
+async function runTask(taskName) {
+  if (currentEventSource) {
+    currentEventSource.close();
+    currentEventSource = null;
+  }
+
+  const btns = ['btn-ingest','btn-build','btn-validate','btn-wipe'];
+  btns.forEach(id => document.getElementById(id).disabled = true);
+
+  const statusBar = document.getElementById('task-statusbar');
+  const spinner = document.getElementById('task-spinner');
+  const taskLabel = document.getElementById('task-label');
+  const badge = document.getElementById('task-status-badge');
+  const log = document.getElementById('log-output');
+
+  const labels = { ingest: '🔍 Ingest', build: '🔨 Build', validate: '✅ Validate' };
+  statusBar.classList.remove('hidden');
+  spinner.style.display = 'inline';
+  taskLabel.textContent = labels[taskName] || taskName;
+  badge.className = 'ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700';
+  badge.textContent = 'läuft…';
+
+  appendLog(`\n▶ Starte ${taskName}…`, 'INFO');
+
+  try {
+    const body = {
+      reset: taskName === 'ingest' && document.getElementById('opt-reset-index').checked,
+      skip_literature: taskName === 'build' && document.getElementById('opt-skip-literature').checked,
+    };
+    const { task_id } = await api('POST', `/api/tasks/${taskName}`, body);
+    streamTask(task_id, taskName, btns, badge, spinner);
+  } catch(e) {
+    appendLog(`Fehler beim Starten: ${e.message}`, 'ERROR');
+    btns.forEach(id => document.getElementById(id).disabled = false);
+    badge.className = 'ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700';
+    badge.textContent = 'Fehler';
+    spinner.style.display = 'none';
+  }
+}
+
+function streamTask(taskId, taskName, btns, badge, spinner) {
+  const es = new EventSource(`/api/tasks/${taskId}/stream`);
+  currentEventSource = es;
+
+  es.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+
+    if (data.type === 'ping') return;
+
+    if (data.type === 'done') {
+      es.close();
+      currentEventSource = null;
+      btns.forEach(id => document.getElementById(id).disabled = false);
+      spinner.style.display = 'none';
+
+      if (data.status === 'done') {
+        badge.className = 'ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700';
+        badge.textContent = '✓ Fertig';
+        appendLog(`\n✓ ${taskName} erfolgreich abgeschlossen.`, 'INFO');
+        if (taskName === 'build') loadReports();
+      } else {
+        badge.className = 'ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700';
+        badge.textContent = '✗ Fehler';
+      }
+      return;
+    }
+
+    if (data.type === 'log') {
+      appendLog(data.msg, data.level || 'INFO');
+    }
+  };
+
+  es.onerror = function() {
+    es.close();
+    currentEventSource = null;
+    btns.forEach(id => document.getElementById(id).disabled = false);
+    badge.className = 'ml-auto px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700';
+    badge.textContent = 'Verbindung unterbrochen';
+    spinner.style.display = 'none';
+    appendLog('SSE-Verbindung unterbrochen.', 'WARNING');
+  };
+}
+
+function appendLog(msg, level) {
+  const log = document.getElementById('log-output');
+  // Remove placeholder
+  const placeholder = log.querySelector('span.text-gray-600');
+  if (placeholder) placeholder.remove();
+
+  const line = document.createElement('div');
+  line.className = `log-${level}`;
+  line.textContent = msg;
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function clearLog() {
+  document.getElementById('log-output').innerHTML =
+    '<span class="text-gray-600">Bereit. Starte einen Task um den Log zu sehen…</span>';
+}
+
+async function confirmWipe() {
+  if (!confirm('Index wirklich löschen? Anschließend muss ein neuer Ingest durchgeführt werden.')) return;
+  try {
+    await api('POST', '/api/tasks/wipe-index');
+    appendLog('✓ Index gelöscht.', 'WARNING');
+    loadStatus();
+  } catch(e) {
+    appendLog(`Fehler: ${e.message}`, 'ERROR');
+  }
+}
+
+async function confirmWipeAll() {
+  if (!confirm('Index UND alle Reports löschen? Dieser Vorgang ist nicht umkehrbar!')) return;
+  try {
+    await api('POST', '/api/tasks/wipe-all');
+    appendLog('✓ Index und Reports gelöscht.', 'WARNING');
+    loadReports();
+    loadStatus();
+  } catch(e) {
+    alert(`Fehler: ${e.message}`);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Reports
+// ────────────────────────────────────────────────────────────────────
+async function loadReports() {
+  const list = document.getElementById('report-list');
+  try {
+    const { files } = await api('GET', '/api/reports');
+    if (!files.length) {
+      list.innerHTML = `<p class="px-5 py-6 text-sm text-gray-400 text-center">
+        Noch keine Reports. Starte Build im Tab 🔨.</p>`;
+      return;
+    }
+
+    // Group by base name
+    const byBase = {};
+    files.forEach(f => {
+      const base = f.name.replace(/\.(md|docx|pdf|bib|json)$/, '');
+      if (!byBase[base]) byBase[base] = [];
+      byBase[base].push(f);
+    });
+
+    list.innerHTML = Object.entries(byBase).map(([base, fs]) => {
+      const mdFile = fs.find(f => f.name.endsWith('.md'));
+      const ts = fs[0]?.mtime;
+      const btnRow = fs.map(f => `
+        <a href="/api/reports/${encodeURIComponent(f.name)}" download
+           class="inline-flex items-center gap-1 text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors">
+          ${fileIcon(f.suffix)} ${f.suffix.toUpperCase()} <span class="text-gray-400">${fmt(f.size)}</span>
+        </a>
+      `).join('');
+
+      const previewBtn = mdFile
+        ? `<button onclick="previewReport('${mdFile.name}')"
+                   class="text-xs text-brand-600 hover:underline ml-1">👁 Vorschau</button>`
+        : '';
+
+      return `
+        <div class="px-5 py-4 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-0">
+          <div class="flex items-center justify-between mb-2">
+            <div class="font-medium text-sm text-gray-800">${base}</div>
+            <div class="text-xs text-gray-400">${fmtDate(ts)}</div>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            ${btnRow}
+            ${previewBtn}
+          </div>
+        </div>
+      `;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<p class="px-5 py-4 text-sm text-red-500">Fehler: ${e.message}</p>`;
+  }
+}
+
+async function previewReport(filename) {
+  try {
+    const { content } = await api('GET', `/api/reports/${encodeURIComponent(filename)}/preview`);
+    document.getElementById('preview-title').textContent = filename;
+    // Simple markdown rendering (replace headings, bold, code)
+    const html = simpleMarkdown(content);
+    document.getElementById('preview-content').innerHTML = html;
+    document.getElementById('preview-container').classList.remove('hidden');
+    document.getElementById('preview-container').scrollIntoView({ behavior: 'smooth' });
+  } catch(e) {
+    alert(`Vorschau-Fehler: ${e.message}`);
+  }
+}
+
+function closePreview() {
+  document.getElementById('preview-container').classList.add('hidden');
+}
+
+// Minimal markdown→html renderer
+function simpleMarkdown(md) {
+  let html = md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // Code blocks
+    .replace(/```[\w]*\n([\s\S]*?)```/g, '<pre class="bg-gray-100 p-3 rounded text-xs overflow-x-auto my-2"><code>$1</code></pre>')
+    // Headings
+    .replace(/^#### (.+)$/gm, '<h4 class="font-semibold text-sm mt-4 mb-1">$1</h4>')
+    .replace(/^### (.+)$/gm, '<h3 class="font-bold text-base mt-5 mb-2">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 class="font-bold text-lg mt-6 mb-2 border-b pb-1">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 class="font-bold text-xl mt-6 mb-3 text-brand-600">$1</h1>')
+    // HR
+    .replace(/^---$/gm, '<hr class="my-4 border-gray-200" />')
+    // Bold / italic
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    // Inline code
+    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded text-xs">$1</code>')
+    // Tables (basic)
+    .replace(/^\|(.+)\|$/gm, (line) => {
+      if (line.match(/^\|[\s\-|]+\|$/)) return '';
+      const cells = line.split('|').filter(c => c.trim() !== '');
+      return '<tr>' + cells.map(c => `<td class="border px-2 py-1 text-xs">${c.trim()}</td>`).join('') + '</tr>';
+    })
+    // Bullet lists
+    .replace(/^[-*] (.+)$/gm, '<li class="ml-4 list-disc text-sm">$1</li>')
+    // Paragraphs
+    .replace(/\n\n/g, '</p><p class="my-2 text-sm leading-relaxed">');
+
+  return `<p class="my-2 text-sm leading-relaxed">${html}</p>`;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// CSS helpers (applied via JS since tailwind CDN doesn't support @apply)
+// ────────────────────────────────────────────────────────────────────
+function injectStyles() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .btn-primary {
+      background: #4f46e5; color: white; padding: .5rem 1.25rem;
+      border-radius: .5rem; font-size: .875rem; font-weight: 500;
+      transition: background .15s; cursor: pointer; border: none;
+    }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-secondary {
+      background: white; color: #374151; padding: .5rem 1.25rem;
+      border-radius: .5rem; font-size: .875rem; font-weight: 500;
+      border: 1px solid #d1d5db; transition: background .15s; cursor: pointer;
+    }
+    .btn-secondary:hover { background: #f9fafb; }
+    .btn-action {
+      padding: .75rem 1rem; border-radius: .75rem; text-align: center;
+      cursor: pointer; transition: all .15s; border: none;
+    }
+    .btn-action:disabled { opacity: .5; cursor: not-allowed; }
+  `;
+  document.head.appendChild(style);
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Init
+// ────────────────────────────────────────────────────────────────────
+injectStyles();
+loadStatus();
+
+// Auto-refresh header badges every 30s
+setInterval(() => {
+  api('GET', '/api/status').then(renderHeaderBadges).catch(() => {});
+}, 30000);
+</script>
+</body>
+</html>

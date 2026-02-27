@@ -14,7 +14,9 @@ Rules enforced here:
 
 from __future__ import annotations
 
+import ipaddress
 import re
+import socket
 from typing import Iterable
 from urllib.parse import urlparse
 
@@ -22,7 +24,7 @@ from tdrcreator.security.logger import get_logger
 
 _log = get_logger("privacy")
 
-# Addresses considered "local"
+# Literal local address patterns (fast path, no DNS lookup needed)
 _LOCAL_PATTERNS = re.compile(
     r"^(localhost|127\.\d+\.\d+\.\d+|::1|0\.0\.0\.0"
     r"|10\.\d+\.\d+\.\d+"
@@ -32,20 +34,43 @@ _LOCAL_PATTERNS = re.compile(
 )
 
 
+def _resolves_to_private(host: str) -> bool:
+    """
+    Return True if `host` resolves via DNS to a private/loopback IP.
+    This handles Docker service names (e.g. 'ollama' → 172.x.x.x).
+    """
+    try:
+        ip_str = socket.gethostbyname(host)
+        addr = ipaddress.ip_address(ip_str)
+        return addr.is_private or addr.is_loopback
+    except (socket.gaierror, ValueError):
+        return False
+
+
 def assert_local_llm(base_url: str) -> None:
     """
-    Raise PrivacyError if the LLM base URL is not a local/LAN address.
-    This prevents accidental exfiltration via a misconfigured cloud endpoint.
+    Raise PrivacyError if the LLM base URL does not resolve to a local/LAN address.
+
+    Accepts:
+      - Literal localhost / RFC-1918 / loopback addresses (fast path)
+      - Docker service hostnames that DNS-resolve to private IPs (e.g. 'ollama')
     """
     parsed = urlparse(base_url)
     host = parsed.hostname or ""
-    if not _LOCAL_PATTERNS.match(host):
-        raise PrivacyError(
-            f"LLM base_url must point to a local address, got host={host!r}. "
-            "Set llm_base_url to your Ollama / vLLM instance (e.g. "
-            "http://localhost:11434)."
-        )
-    _log.info(f"LLM host check: host={host!r} – OK (local)")
+
+    if _LOCAL_PATTERNS.match(host):
+        _log.info(f"LLM host check: host={host!r} – OK (literal local)")
+        return
+
+    if _resolves_to_private(host):
+        _log.info(f"LLM host check: host={host!r} resolves to private IP – OK (Docker/LAN)")
+        return
+
+    raise PrivacyError(
+        f"LLM base_url must point to a local/LAN address, got host={host!r}. "
+        "Set llm_base_url to your Ollama instance (e.g. http://localhost:11434 "
+        "or http://ollama:11434 in Docker)."
+    )
 
 
 def assert_literature_allowed(allow_network: bool) -> None:
