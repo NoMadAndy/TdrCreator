@@ -171,7 +171,7 @@ def build_report(
                 timeout=config.llm_timeout,
             )
         except Exception as exc:
-            _log.error(f"LLM generation failed for section={key}: {type(exc).__name__}")
+            _log.error(f"LLM generation failed for section={key}: {type(exc).__name__}: {exc}")
             raw_text = (
                 f"*[LLM-Fehler: {exc}]*\n\n"
                 "*[Einschätzung/Inference – ohne Quelle] "

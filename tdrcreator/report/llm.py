@@ -8,6 +8,7 @@ Document text is sent to the local Ollama process – it never leaves the machin
 from __future__ import annotations
 
 import json
+import time
 from typing import Iterator
 
 import requests
@@ -47,31 +48,73 @@ def generate(
         "options": {"temperature": temperature},
     }
 
-    try:
-        resp = requests.post(url, json=payload, timeout=timeout)
-        resp.raise_for_status()
-        data = resp.json()
-        text = data.get("response", "")
-        _log.metric(
-            "llm_generate",
-            model=model,
-            prompt_len=len(prompt),
-            response_len=len(text),
-            done=data.get("done", False),
-        )
-        return text
-    except requests.ConnectionError:
-        raise RuntimeError(
-            f"Cannot connect to Ollama at {base_url}. "
-            "Is Ollama running? Start it with: ollama serve"
-        )
-    except requests.Timeout:
-        raise RuntimeError(
-            f"LLM request timed out after {timeout}s. "
-            "Try increasing llm_timeout in config.yaml or use a faster model."
-        )
-    except requests.HTTPError as e:
-        raise RuntimeError(f"LLM HTTP error: {e}")
+    max_retries = 2
+    last_exc: Exception | None = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            resp = requests.post(url, json=payload, timeout=timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            text = data.get("response", "")
+            _log.metric(
+                "llm_generate",
+                model=model,
+                prompt_len=len(prompt),
+                response_len=len(text),
+                done=data.get("done", False),
+            )
+            return text
+        except requests.ConnectionError as exc:
+            last_exc = exc
+            if attempt < max_retries:
+                _log.warning(
+                    f"Ollama connection failed (attempt {attempt + 1}/{max_retries + 1}), "
+                    f"retrying in {1.5 * (attempt + 1):.0f}s …"
+                )
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            raise RuntimeError(
+                f"Cannot connect to Ollama at {base_url} after {max_retries + 1} attempts. "
+                "Is Ollama running? Start it with: ollama serve"
+            ) from exc
+        except requests.Timeout as exc:
+            last_exc = exc
+            if attempt < max_retries:
+                _log.warning(
+                    f"Ollama request timed out (attempt {attempt + 1}/{max_retries + 1}), "
+                    f"retrying …"
+                )
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            raise RuntimeError(
+                f"LLM request timed out after {timeout}s ({max_retries + 1} attempts). "
+                "Try increasing llm_timeout in config.yaml or use a faster model."
+            ) from exc
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else "?"
+            # Retry on 5xx server errors (Ollama overloaded, restarting, etc.)
+            if exc.response is not None and exc.response.status_code >= 500:
+                last_exc = exc
+                if attempt < max_retries:
+                    _log.warning(
+                        f"Ollama HTTP {status} (attempt {attempt + 1}/{max_retries + 1}), "
+                        f"retrying in {1.5 * (attempt + 1):.0f}s …"
+                    )
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+            raise RuntimeError(
+                f"LLM HTTP error (status={status}): {exc}"
+            ) from exc
+        except (json.JSONDecodeError, ValueError) as exc:
+            raise RuntimeError(
+                f"Invalid JSON response from Ollama at {url}: {exc}"
+            ) from exc
+
+    # Should not be reached, but just in case
+    raise RuntimeError(
+        f"LLM request failed after {max_retries + 1} attempts: {last_exc}"
+    )
 
 
 def list_models(base_url: str) -> list[str]:
