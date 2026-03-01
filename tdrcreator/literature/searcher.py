@@ -34,16 +34,50 @@ _TIMEOUT = 15  # seconds per HTTP request
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+_MAX_RETRIES = 2  # retry once for transient errors
+
+
 def _safe_get(url: str, params: dict | None = None) -> dict | list | None:
-    try:
-        r = requests.get(url, params=params, timeout=_TIMEOUT, headers={
-            "User-Agent": "TdrCreator/0.1 (local research tool; no-exfil)"
-        })
-        r.raise_for_status()
-        return r.json()
-    except Exception as exc:
-        _log.error(f"HTTP error: {type(exc).__name__}")
-        return None
+    last_exc: Exception | None = None
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            r = requests.get(url, params=params, timeout=_TIMEOUT, headers={
+                "User-Agent": "TdrCreator/0.1 (local research tool; no-exfil)"
+            })
+            r.raise_for_status()
+            return r.json()
+        except requests.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else "?"
+            _log.error(
+                f"HTTP error: {type(exc).__name__} (status={status}) "
+                f"url={url!r} – {exc}"
+            )
+            # Retry on 5xx server errors
+            if exc.response is not None and exc.response.status_code >= 500:
+                last_exc = exc
+                if attempt < _MAX_RETRIES:
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+            return None
+        except requests.ConnectionError as exc:
+            _log.error(f"HTTP connection error: {exc}")
+            last_exc = exc
+            if attempt < _MAX_RETRIES:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            return None
+        except requests.Timeout as exc:
+            _log.error(f"HTTP timeout ({_TIMEOUT}s): url={url!r}")
+            last_exc = exc
+            if attempt < _MAX_RETRIES:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            return None
+        except Exception as exc:
+            _log.error(f"HTTP error: {type(exc).__name__}: {exc}")
+            return None
+    _log.error(f"HTTP request failed after {_MAX_RETRIES + 1} attempts: {last_exc}")
+    return None
 
 
 def _parse_author_crossref(a: dict) -> Author:
@@ -215,7 +249,7 @@ def search_arxiv(
         r.raise_for_status()
         root = ET.fromstring(r.text)
     except Exception as exc:
-        _log.error(f"arXiv error: {type(exc).__name__}")
+        _log.error(f"arXiv error: {type(exc).__name__}: {exc}")
         return []
 
     NS = "http://www.w3.org/2005/Atom"
@@ -301,7 +335,7 @@ def search_literature(
                 time.sleep(0.5)  # polite rate limiting
 
             except Exception as exc:
-                _log.error(f"Literature search error: source={source!r} exc={type(exc).__name__}")
+                _log.error(f"Literature search error: source={source!r} exc={type(exc).__name__}: {exc}")
 
     _log.metric("literature_total", refs=len(all_refs))
     return all_refs
