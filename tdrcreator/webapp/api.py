@@ -527,6 +527,119 @@ async def preview_report(filename: str):
 
 
 # ---------------------------------------------------------------------------
+# Routes: GPU monitoring
+# ---------------------------------------------------------------------------
+
+def _gpu_info() -> dict:
+    """Query NVIDIA GPU info via nvidia-smi and CUDA details."""
+    import subprocess
+
+    result = {
+        "available": False,
+        "driver_version": None,
+        "cuda_version": None,
+        "gpus": [],
+        "error": None,
+    }
+
+    # Query nvidia-smi for per-GPU metrics
+    query_fields = (
+        "index,name,utilization.gpu,utilization.memory,"
+        "memory.used,memory.total,temperature.gpu,"
+        "power.draw,power.limit,fan.speed"
+    )
+    try:
+        proc = subprocess.run(
+            [
+                "nvidia-smi",
+                f"--query-gpu={query_fields}",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if proc.returncode == 0:
+            result["available"] = True
+            for line in proc.stdout.strip().splitlines():
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) < 10:
+                    continue
+
+                def _int(v: str):
+                    try:
+                        return int(float(v))
+                    except (ValueError, TypeError):
+                        return None
+
+                def _float(v: str):
+                    try:
+                        return round(float(v), 1)
+                    except (ValueError, TypeError):
+                        return None
+
+                result["gpus"].append({
+                    "index": _int(parts[0]),
+                    "name": parts[1],
+                    "utilization_gpu": _int(parts[2]),
+                    "utilization_memory": _int(parts[3]),
+                    "memory_used_mb": _int(parts[4]),
+                    "memory_total_mb": _int(parts[5]),
+                    "temperature": _int(parts[6]),
+                    "power_draw": _float(parts[7]),
+                    "power_limit": _float(parts[8]),
+                    "fan_speed": _int(parts[9]),
+                })
+        else:
+            result["error"] = proc.stderr.strip() or "nvidia-smi fehlgeschlagen"
+    except FileNotFoundError:
+        result["error"] = "nvidia-smi nicht gefunden – kein NVIDIA-Treiber installiert"
+    except subprocess.TimeoutExpired:
+        result["error"] = "nvidia-smi Timeout"
+    except Exception as exc:
+        result["error"] = str(exc)
+
+    # Driver & CUDA version from nvidia-smi main output
+    if result["available"]:
+        try:
+            proc2 = subprocess.run(
+                ["nvidia-smi", "--query", "--display=DRIVER"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in proc2.stdout.splitlines():
+                if "Driver Version" in line:
+                    result["driver_version"] = line.split(":")[-1].strip()
+                if "CUDA Version" in line:
+                    result["cuda_version"] = line.split(":")[-1].strip()
+        except Exception:
+            pass
+
+    # Fallback: CUDA version via nvcc
+    if not result["cuda_version"]:
+        try:
+            proc3 = subprocess.run(
+                ["nvcc", "--version"], capture_output=True, text=True, timeout=5,
+            )
+            for line in proc3.stdout.splitlines():
+                if "release" in line.lower():
+                    import re
+                    m = re.search(r"release\s+([\d.]+)", line, re.I)
+                    if m:
+                        result["cuda_version"] = m.group(1)
+                        break
+        except Exception:
+            pass
+
+    return result
+
+
+@app.get("/api/gpu")
+async def gpu_status():
+    """Return live GPU / CUDA statistics."""
+    return await asyncio.to_thread(_gpu_info)
+
+
+# ---------------------------------------------------------------------------
 # Routes: Ollama models
 # ---------------------------------------------------------------------------
 
