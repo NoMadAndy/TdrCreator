@@ -222,6 +222,70 @@ def _index_stats() -> dict:
     return {"exists": False, "chunk_count": 0, "doc_count": 0}
 
 
+def _gpu_status() -> dict:
+    """Query nvidia-smi for GPU metrics and Ollama /api/ps for loaded models."""
+    import subprocess
+
+    result: dict[str, Any] = {
+        "nvidia_available": False,
+        "gpu_name": None,
+        "vram_used_mb": None,
+        "vram_total_mb": None,
+        "utilization_pct": None,
+        "ollama_models": [],
+        "error": None,
+    }
+
+    # 1. nvidia-smi
+    try:
+        raw = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,memory.used,memory.total,utilization.gpu",
+                "--format=csv,noheader,nounits",
+            ],
+            timeout=5,
+            stderr=subprocess.DEVNULL,
+        ).decode().strip().splitlines()[0]  # first GPU only
+        parts = [p.strip() for p in raw.split(",")]
+        if len(parts) >= 4:
+            result["nvidia_available"] = True
+            result["gpu_name"] = parts[0]
+            result["vram_used_mb"] = int(parts[1])
+            result["vram_total_mb"] = int(parts[2])
+            result["utilization_pct"] = int(parts[3])
+    except FileNotFoundError:
+        result["error"] = "nvidia-smi nicht gefunden"
+    except Exception as e:
+        result["error"] = str(e)
+
+    # 2. Ollama /api/ps – shows currently loaded models + VRAM usage
+    try:
+        cfg = _load_config()
+        base_url = cfg.llm_base_url
+    except Exception:
+        base_url = "http://ollama:11434"
+    import requests as _req
+    try:
+        r = _req.get(base_url.rstrip("/") + "/api/ps", timeout=5)
+        r.raise_for_status()
+        for m in r.json().get("models", []):
+            size_vram = m.get("size_vram", 0)
+            size_total = m.get("size", 0)
+            result["ollama_models"].append({
+                "name": m.get("name", ""),
+                "size_vram_mb": round(size_vram / 1024 / 1024),
+                "size_total_mb": round(size_total / 1024 / 1024),
+                "on_gpu": size_vram > 0,
+                "expires_at": m.get("expires_at"),
+            })
+    except Exception as e:
+        ps_err = f"Ollama /api/ps: {e}"
+        result["error"] = f"{result['error']} | {ps_err}" if result["error"] else ps_err
+
+    return result
+
+
 def _ollama_status(base_url: str, model: str) -> dict:
     import requests
     try:
@@ -253,6 +317,11 @@ async def serve_index():
 @app.get("/api/health")
 async def health():
     return {"ok": True}
+
+
+@app.get("/api/gpu")
+async def gpu():
+    return _gpu_status()
 
 
 @app.get("/api/status")

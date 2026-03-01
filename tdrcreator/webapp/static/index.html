@@ -65,6 +65,10 @@
       <span id="llm-dot" class="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0"></span>
       <span id="llm-label" class="hidden xs:inline sm:inline truncate max-w-[120px] sm:max-w-none">LLM: prüfe…</span>
     </div>
+    <div id="gpu-badge" class="hidden sm:flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full cursor-pointer hover:bg-gray-200 transition-colors" onclick="showTab('dashboard')" title="GPU-Details im Dashboard">
+      <span id="gpu-dot" class="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0"></span>
+      <span id="gpu-label" class="whitespace-nowrap">GPU: –</span>
+    </div>
     <div id="index-badge" class="hidden sm:flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full">
       <span class="text-gray-500">Index:</span>
       <span id="index-label" class="font-mono">–</span>
@@ -87,7 +91,22 @@
   <!-- ── DASHBOARD ── -->
   <div id="panel-dashboard" class="panel fade-in">
     <h2 class="text-xl font-semibold mb-6">Status</h2>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" id="status-cards"></div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" id="status-cards"></div>
+
+    <!-- GPU card -->
+    <div class="bg-white rounded-xl border p-5 mb-6" id="gpu-card">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">🖥️</span>
+          <span class="font-semibold text-gray-700 text-sm">GPU / VRAM</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="gpu-card-status" class="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">prüfe…</span>
+          <button onclick="loadGpu()" class="text-xs text-brand-600 hover:underline">↻</button>
+        </div>
+      </div>
+      <div id="gpu-card-body" class="text-sm text-gray-400 italic">Lade…</div>
+    </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="bg-white rounded-xl border p-5">
@@ -328,7 +347,7 @@ function fmtDate(ts) {
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────
 const tabLoaders = {
-  dashboard: loadStatus,
+  dashboard: () => { loadStatus(); loadGpu(); },
   documents: loadDocuments,
   config:    () => { loadConfig().then(loadEmbeddingModels); },
   build:     () => {},
@@ -799,11 +818,115 @@ function simpleMarkdown(md) {
   document.head.appendChild(s);
 })();
 
+// ─── GPU ──────────────────────────────────────────────────────────────────
+async function loadGpu() {
+  try {
+    const g = await api('GET', '/api/gpu');
+    renderGpuCard(g);
+    renderGpuBadge(g);
+  } catch(e) {
+    document.getElementById('gpu-card-body').innerHTML =
+      `<span class="text-red-500">Fehler: ${e.message}</span>`;
+  }
+}
+
+function renderGpuBadge(g) {
+  const dot   = document.getElementById('gpu-dot');
+  const label = document.getElementById('gpu-label');
+  const loaded = g.ollama_models?.find(m => m.on_gpu);
+  if (g.nvidia_available) {
+    const pct = g.utilization_pct ?? 0;
+    dot.className = `w-2 h-2 rounded-full flex-shrink-0 ${pct > 5 ? 'bg-green-500' : 'bg-blue-400'}`;
+    const used  = g.vram_used_mb != null ? `${(g.vram_used_mb/1024).toFixed(1)}` : '?';
+    const total = g.vram_total_mb != null ? `${(g.vram_total_mb/1024).toFixed(1)}` : '?';
+    label.textContent = `GPU: ${used}/${total} GB`;
+  } else if (loaded) {
+    dot.className = 'w-2 h-2 rounded-full flex-shrink-0 bg-green-500';
+    label.textContent = 'GPU: aktiv';
+  } else if (g.ollama_models?.length) {
+    dot.className = 'w-2 h-2 rounded-full flex-shrink-0 bg-yellow-400';
+    label.textContent = 'GPU: CPU-Modus';
+  } else {
+    dot.className = 'w-2 h-2 rounded-full flex-shrink-0 bg-gray-400';
+    label.textContent = 'GPU: kein NVIDIA';
+  }
+}
+
+function renderGpuCard(g) {
+  const badge = document.getElementById('gpu-card-status');
+  const body  = document.getElementById('gpu-card-body');
+
+  // Status badge
+  const anyOnGpu = g.ollama_models?.some(m => m.on_gpu);
+  if (g.nvidia_available && anyOnGpu) {
+    badge.className = 'text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700';
+    badge.textContent = '✓ GPU aktiv';
+  } else if (g.nvidia_available) {
+    badge.className = 'text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700';
+    badge.textContent = 'GPU verfügbar';
+  } else if (anyOnGpu) {
+    badge.className = 'text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700';
+    badge.textContent = '✓ GPU aktiv';
+  } else {
+    badge.className = 'text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500';
+    badge.textContent = 'kein NVIDIA';
+  }
+
+  let html = '';
+
+  // VRAM bar (only if nvidia-smi available)
+  if (g.nvidia_available && g.vram_total_mb) {
+    const used  = g.vram_used_mb ?? 0;
+    const total = g.vram_total_mb;
+    const pct   = Math.round(used / total * 100);
+    const barColor = pct > 90 ? 'bg-red-500' : pct > 70 ? 'bg-yellow-400' : 'bg-green-500';
+    html += `
+      <div class="mb-3">
+        <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
+          <span class="font-medium text-gray-700">${g.gpu_name ?? 'GPU'}</span>
+          <span>${(used/1024).toFixed(1)} / ${(total/1024).toFixed(1)} GB VRAM · ${g.utilization_pct ?? 0}% Last</span>
+        </div>
+        <div class="w-full bg-gray-100 rounded-full h-2">
+          <div class="${barColor} h-2 rounded-full transition-all" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+  }
+
+  // Ollama loaded models
+  if (g.ollama_models?.length) {
+    html += `<div class="space-y-1.5 mt-2">`;
+    for (const m of g.ollama_models) {
+      const procBadge = m.on_gpu
+        ? '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">GPU</span>'
+        : '<span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded font-medium">CPU</span>';
+      const vram = m.on_gpu && m.size_vram_mb
+        ? `<span class="text-gray-400">${(m.size_vram_mb/1024).toFixed(1)} GB VRAM</span>`
+        : `<span class="text-gray-400">${(m.size_total_mb/1024).toFixed(1)} GB RAM</span>`;
+      html += `<div class="flex items-center gap-2 text-xs">
+        ${procBadge}
+        <span class="font-mono text-gray-700 truncate">${m.name}</span>
+        ${vram}
+      </div>`;
+    }
+    html += `</div>`;
+  } else {
+    html += `<p class="text-xs text-gray-400 mt-1">Kein Modell geladen – starte einen Build, um das LLM zu aktivieren.</p>`;
+  }
+
+  if (g.error && !g.nvidia_available) {
+    html += `<p class="text-xs text-gray-400 mt-2 italic">${g.error}</p>`;
+  }
+
+  body.innerHTML = html || '<span class="text-gray-400 text-xs">Keine Daten.</span>';
+}
+
 // ─── Init ─────────────────────────────────────────────────────────────────
 loadStatus();
+loadGpu();
 setInterval(() => {
   api('GET', '/api/status').then(renderHeaderBadges).catch(() => {});
 }, 30000);
+setInterval(loadGpu, 5000);
 </script>
 </body>
 </html>
