@@ -45,14 +45,14 @@ services:
       - ollama_data:/root/.ollama
     networks:
       - tdr_net
-    # GPU support – uncomment for NVIDIA GPU acceleration:
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+    # GPU support – NVIDIA CUDA acceleration
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     #healthcheck:
     #  test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
     #  interval: 20s

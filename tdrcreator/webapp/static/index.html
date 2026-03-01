@@ -3,7 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#4f46e5" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TdrCreator" />
   <title>TdrCreator</title>
+  <!-- Favicon -->
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/static/favicon.ico" sizes="48x48" />
+  <link rel="icon" href="/static/favicon-32x32.png" sizes="32x32" type="image/png" />
+  <link rel="icon" href="/static/favicon-16x16.png" sizes="16x16" type="image/png" />
+  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/static/manifest.json" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -33,6 +45,7 @@
     .dt-allgemein{ background:#f3f4f6; color:#374151; }
     .dt-btn { border: 2px solid transparent; transition: all .15s; }
     .dt-btn.selected { border-color: currentColor; font-weight: 600; }
+    .ecat-btn { transition: all .15s; }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-800">
@@ -143,6 +156,29 @@
   <!-- ── KONFIGURATION ── -->
   <div id="panel-config" class="panel hidden fade-in">
     <h2 class="text-xl font-semibold mb-6">Konfiguration</h2>
+
+    <!-- Embedding model selector -->
+    <div class="bg-white rounded-xl border p-6 mb-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="font-semibold text-gray-700">Embedding-Modell (RAG)</h3>
+          <p class="text-xs text-gray-400 mt-1">Wandelt Text in Vektoren um, damit relevante Quellen gefunden werden. Nicht das LLM!</p>
+        </div>
+        <span id="emb-current" class="text-xs bg-brand-100 text-brand-600 px-3 py-1 rounded-full font-mono"></span>
+      </div>
+
+      <!-- Category filters -->
+      <div class="flex gap-2 mb-4">
+        <button onclick="filterEmbModels('alle')"   data-ecat="alle"   class="ecat-btn text-xs px-3 py-1 rounded-full border cursor-pointer bg-brand-600 text-white border-brand-600">Alle</button>
+        <button onclick="filterEmbModels('klein')"   data-ecat="klein"  class="ecat-btn text-xs px-3 py-1 rounded-full border cursor-pointer text-gray-600 border-gray-300 hover:border-brand-600">Klein (&lt;500 MB)</button>
+        <button onclick="filterEmbModels('mittel')"  data-ecat="mittel" class="ecat-btn text-xs px-3 py-1 rounded-full border cursor-pointer text-gray-600 border-gray-300 hover:border-brand-600">Mittel (500-1200 MB)</button>
+        <button onclick="filterEmbModels('gross')"   data-ecat="gross"  class="ecat-btn text-xs px-3 py-1 rounded-full border cursor-pointer text-gray-600 border-gray-300 hover:border-brand-600">Gross (&gt;1200 MB)</button>
+      </div>
+
+      <div id="emb-model-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+      <div id="emb-status" class="text-sm mt-3"></div>
+    </div>
+
     <div class="bg-white rounded-xl border p-6">
       <p class="text-sm text-gray-500 mb-4">
         Bearbeite <code class="bg-gray-100 px-1 rounded">config.yaml</code> direkt.
@@ -291,7 +327,7 @@ function fmtDate(ts) {
 const tabLoaders = {
   dashboard: loadStatus,
   documents: loadDocuments,
-  config:    loadConfig,
+  config:    () => { loadConfig().then(loadEmbeddingModels); },
   build:     () => {},
   reports:   loadReports,
 };
@@ -473,6 +509,98 @@ async function saveConfig() {
     setTimeout(() => { status.textContent = ''; }, 3000);
   } catch(e) {
     status.className = 'text-sm ml-2 text-red-600';
+    status.textContent = `Fehler: ${e.message}`;
+  }
+}
+
+// ─── Embedding Model Selector ─────────────────────────────────────────────
+let embModels = [];
+let embFilterCat = 'alle';
+
+const LANG_BADGE = {
+  'en':    '<span class="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">EN</span>',
+  'multi': '<span class="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">Multi</span>',
+  'de':    '<span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">DE</span>',
+  'de/en': '<span class="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">DE/EN</span>',
+};
+
+async function loadEmbeddingModels() {
+  try {
+    const { models } = await api('GET', '/api/embedding-models');
+    embModels = models;
+    // Read current model from config editor
+    const cfgText = document.getElementById('config-editor').value;
+    const match = cfgText.match(/^embedding_model:\s*"?([^"\n]+)"?/m);
+    const current = match ? match[1].trim() : '';
+    document.getElementById('emb-current').textContent = current ? current.split('/').pop() : '–';
+    renderEmbModels(current);
+  } catch(e) {
+    document.getElementById('emb-model-list').innerHTML =
+      `<p class="text-sm text-red-500 col-span-2">Fehler: ${e.message}</p>`;
+  }
+}
+
+function filterEmbModels(cat) {
+  embFilterCat = cat;
+  document.querySelectorAll('.ecat-btn').forEach(b => {
+    if (b.dataset.ecat === cat) {
+      b.className = 'ecat-btn text-xs px-3 py-1 rounded-full border cursor-pointer bg-brand-600 text-white border-brand-600';
+    } else {
+      b.className = 'ecat-btn text-xs px-3 py-1 rounded-full border cursor-pointer text-gray-600 border-gray-300 hover:border-brand-600';
+    }
+  });
+  const cfgText = document.getElementById('config-editor').value;
+  const match = cfgText.match(/^embedding_model:\s*"?([^"\n]+)"?/m);
+  renderEmbModels(match ? match[1].trim() : '');
+}
+
+function renderEmbModels(currentId) {
+  const list = document.getElementById('emb-model-list');
+  const filtered = embFilterCat === 'alle' ? embModels : embModels.filter(m => m.category === embFilterCat);
+  if (!filtered.length) {
+    list.innerHTML = '<p class="text-sm text-gray-400 col-span-2 text-center py-4">Keine Modelle in dieser Kategorie.</p>';
+    return;
+  }
+  list.innerHTML = filtered.map(m => {
+    const active = m.id === currentId;
+    const border = active ? 'border-brand-600 bg-brand-100/30 ring-1 ring-brand-600' : 'border-gray-200 hover:border-brand-600';
+    const vram = m.size_mb < 1000 ? `${m.size_mb} MB` : `${(m.size_mb/1024).toFixed(1)} GB`;
+    return `<div class="border rounded-lg p-4 cursor-pointer transition-all ${border}" onclick="selectEmbModel('${m.id}')">
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-medium text-sm text-gray-800">${m.label}</span>
+        ${LANG_BADGE[m.lang] || ''}
+      </div>
+      <p class="text-xs text-gray-500 mb-2">${m.description}</p>
+      <div class="flex gap-3 text-xs text-gray-400">
+        <span title="VRAM-Bedarf">~${vram}</span>
+        <span title="Embedding-Dimension">${m.dim}d</span>
+        <span title="Max. Tokens">${m.max_tokens} Tok.</span>
+      </div>
+      ${active ? '<div class="mt-2 text-xs text-brand-600 font-medium">Aktiv</div>' : ''}
+    </div>`;
+  }).join('');
+}
+
+async function selectEmbModel(modelId) {
+  const status = document.getElementById('emb-status');
+  // Update in config.yaml via editor
+  let cfgText = document.getElementById('config-editor').value;
+  if (cfgText.match(/^embedding_model:/m)) {
+    cfgText = cfgText.replace(/^embedding_model:\s*"?[^"\n]+"?/m, `embedding_model: "${modelId}"`);
+  } else {
+    cfgText += `\nembedding_model: "${modelId}"\n`;
+  }
+  document.getElementById('config-editor').value = cfgText;
+  // Save config
+  try {
+    await api('POST', '/api/config', { yaml: cfgText });
+    document.getElementById('emb-current').textContent = modelId.split('/').pop();
+    status.className = 'text-sm text-green-600';
+    status.textContent = `Modell gewechselt zu ${modelId.split('/').pop()}. Index muss neu erstellt werden (Ingest).`;
+    renderEmbModels(modelId);
+    setTimeout(() => { status.textContent = ''; }, 6000);
+  } catch(e) {
+    status.className = 'text-sm text-red-600';
     status.textContent = `Fehler: ${e.message}`;
   }
 }
