@@ -21,6 +21,14 @@ services:
       # Embedding model (override if you prefer a different one)
       EMBEDDING_MODEL: "${EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}"
       TOKENIZERS_PARALLELISM: "false"
+    # GPU support – allows nvidia-smi monitoring from the web UI
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     depends_on:
       ollama:
         condition: service_healthy
