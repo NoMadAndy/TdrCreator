@@ -21,13 +21,16 @@
     tailwind.config = {
       theme: {
         extend: {
-          colors: { brand: { 600: '#4f46e5', 700: '#4338ca', 100: '#e0e7ff' } }
+          colors: { brand: { 600: '#4f46e5', 700: '#4338ca', 100: '#e0e7ff' } },
+          screens: { xs: '480px' }
         }
       }
     }
   </script>
   <style>
     #log-output { font-family: 'Courier New', monospace; font-size: 0.8rem; }
+    .scrollbar-none { scrollbar-width: none; -ms-overflow-style: none; }
+    .scrollbar-none::-webkit-scrollbar { display: none; }
     .log-INFO    { color: #d1fae5; }
     .log-WARNING { color: #fde68a; }
     .log-ERROR   { color: #fca5a5; }
@@ -51,18 +54,18 @@
 <body class="bg-gray-50 min-h-screen text-gray-800">
 
 <!-- ════════════════════════════════ HEADER ═══════════════════════════════ -->
-<header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-  <div class="flex items-center gap-3">
-    <span class="text-2xl">📄</span>
-    <span class="font-bold text-xl text-brand-600">TdrCreator</span>
-    <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">🔒 Lokal &amp; Privat</span>
+<header class="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm gap-2 flex-wrap">
+  <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+    <span class="text-2xl flex-shrink-0">📄</span>
+    <span class="font-bold text-lg sm:text-xl text-brand-600 truncate">TdrCreator</span>
+    <span class="hidden sm:inline text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">🔒 Lokal &amp; Privat</span>
   </div>
-  <div class="flex items-center gap-4 text-sm">
-    <div id="llm-badge" class="flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full">
-      <span id="llm-dot" class="w-2 h-2 rounded-full bg-gray-400"></span>
-      <span id="llm-label">LLM: prüfe…</span>
+  <div class="flex items-center gap-2 sm:gap-4 text-sm flex-shrink-0">
+    <div id="llm-badge" class="flex items-center gap-1.5 bg-gray-100 px-2 sm:px-3 py-1 rounded-full">
+      <span id="llm-dot" class="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0"></span>
+      <span id="llm-label" class="hidden xs:inline sm:inline truncate max-w-[120px] sm:max-w-none">LLM: prüfe…</span>
     </div>
-    <div id="index-badge" class="flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full">
+    <div id="index-badge" class="hidden sm:flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full">
       <span class="text-gray-500">Index:</span>
       <span id="index-label" class="font-mono">–</span>
     </div>
@@ -70,16 +73,16 @@
 </header>
 
 <!-- ════════════════════════════════ TABS ════════════════════════════════ -->
-<nav class="bg-white border-b border-gray-200 px-6 flex gap-0">
-  <button onclick="showTab('dashboard')" id="tab-dashboard" class="tab-btn tab-active px-5 py-3 text-sm hover:text-brand-600 transition-colors">📊 Dashboard</button>
-  <button onclick="showTab('documents')" id="tab-documents" class="tab-btn px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors">📁 Dokumente</button>
-  <button onclick="showTab('config')"    id="tab-config"    class="tab-btn px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors">⚙️ Konfiguration</button>
-  <button onclick="showTab('build')"    id="tab-build"    class="tab-btn px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors">🔨 Build</button>
-  <button onclick="showTab('reports')"  id="tab-reports"  class="tab-btn px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors">📋 Reports</button>
+<nav class="bg-white border-b border-gray-200 px-2 sm:px-6 flex gap-0 overflow-x-auto scrollbar-none">
+  <button onclick="showTab('dashboard')" id="tab-dashboard" class="tab-btn tab-active px-3 sm:px-5 py-3 text-sm hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">📊 <span class="hidden sm:inline">Dashboard</span><span class="sm:hidden">Status</span></button>
+  <button onclick="showTab('documents')" id="tab-documents" class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">📁 <span class="hidden sm:inline">Dokumente</span><span class="sm:hidden">Docs</span></button>
+  <button onclick="showTab('config')"    id="tab-config"    class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">⚙️ <span class="hidden sm:inline">Konfiguration</span><span class="sm:hidden">Config</span></button>
+  <button onclick="showTab('build')"    id="tab-build"    class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">🔨 Build</button>
+  <button onclick="showTab('reports')"  id="tab-reports"  class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">📋 Reports</button>
 </nav>
 
 <!-- ════════════════════════════════ CONTENT ═════════════════════════════ -->
-<main class="max-w-6xl mx-auto px-6 py-8">
+<main class="max-w-6xl mx-auto px-3 sm:px-6 py-4 sm:py-8">
 
   <!-- ── DASHBOARD ── -->
   <div id="panel-dashboard" class="panel fade-in">
@@ -130,7 +133,7 @@
 
     <!-- Drop zone -->
     <div id="dropzone"
-         class="border-2 border-dashed border-gray-300 rounded-xl p-10 text-center mb-5 cursor-pointer transition-all hover:border-brand-600"
+         class="border-2 border-dashed border-gray-300 rounded-xl p-6 sm:p-10 text-center mb-5 cursor-pointer transition-all hover:border-brand-600"
          ondragover="event.preventDefault(); this.classList.add('drop-active')"
          ondragleave="this.classList.remove('drop-active')"
          ondrop="handleDrop(event)"
@@ -159,16 +162,16 @@
 
     <!-- Embedding model selector -->
     <div class="bg-white rounded-xl border p-6 mb-5">
-      <div class="flex items-center justify-between mb-4">
-        <div>
+      <div class="flex flex-wrap items-start justify-between gap-2 mb-4">
+        <div class="min-w-0">
           <h3 class="font-semibold text-gray-700">Embedding-Modell (RAG)</h3>
           <p class="text-xs text-gray-400 mt-1">Wandelt Text in Vektoren um, damit relevante Quellen gefunden werden. Nicht das LLM!</p>
         </div>
-        <span id="emb-current" class="text-xs bg-brand-100 text-brand-600 px-3 py-1 rounded-full font-mono"></span>
+        <span id="emb-current" class="text-xs bg-brand-100 text-brand-600 px-3 py-1 rounded-full font-mono flex-shrink-0"></span>
       </div>
 
       <!-- Category filters -->
-      <div class="flex gap-2 mb-4">
+      <div class="flex flex-wrap gap-2 mb-4">
         <button onclick="filterEmbModels('alle')"   data-ecat="alle"   class="ecat-btn text-xs px-3 py-1 rounded-full border cursor-pointer bg-brand-600 text-white border-brand-600">Alle</button>
         <button onclick="filterEmbModels('klein')"   data-ecat="klein"  class="ecat-btn text-xs px-3 py-1 rounded-full border cursor-pointer text-gray-600 border-gray-300 hover:border-brand-600">Klein (&lt;500 MB)</button>
         <button onclick="filterEmbModels('mittel')"  data-ecat="mittel" class="ecat-btn text-xs px-3 py-1 rounded-full border cursor-pointer text-gray-600 border-gray-300 hover:border-brand-600">Mittel (500-1200 MB)</button>
@@ -187,7 +190,7 @@
         <code class="bg-gray-100 px-1 rounded">llm_model</code>.
       </p>
       <textarea id="config-editor"
-                class="w-full h-[520px] font-mono text-sm bg-gray-900 text-green-300 rounded-lg p-4 resize-y focus:outline-none focus:ring-2 focus:ring-brand-600"
+                class="w-full h-64 sm:h-[520px] font-mono text-sm bg-gray-900 text-green-300 rounded-lg p-4 resize-y focus:outline-none focus:ring-2 focus:ring-brand-600"
                 spellcheck="false"></textarea>
       <div class="flex items-center gap-3 mt-4">
         <button onclick="saveConfig()" class="btn-primary">💾 Speichern</button>
@@ -246,10 +249,10 @@
     </div>
 
     <!-- Status bar -->
-    <div id="task-statusbar" class="hidden bg-white rounded-xl border px-5 py-3 mb-4 flex items-center gap-3 text-sm">
+    <div id="task-statusbar" class="hidden bg-white rounded-xl border px-4 sm:px-5 py-3 mb-4 flex flex-wrap items-center gap-2 sm:gap-3 text-sm">
       <span id="task-spinner" class="animate-spin hidden">⟳</span>
-      <span id="task-label" class="font-medium"></span>
-      <span id="task-status-badge" class="ml-auto px-2 py-0.5 rounded-full text-xs font-medium"></span>
+      <span id="task-label" class="font-medium min-w-0 truncate"></span>
+      <span id="task-status-badge" class="sm:ml-auto px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap"></span>
     </div>
 
     <!-- Log -->
@@ -258,7 +261,7 @@
         <span class="text-gray-400 text-xs font-mono">Build Log</span>
         <button onclick="clearLog()" class="text-gray-500 hover:text-gray-300 text-xs">✕ leeren</button>
       </div>
-      <div id="log-output" class="h-80 overflow-y-auto p-4 text-gray-300 whitespace-pre-wrap" style="scroll-behavior:smooth;">
+      <div id="log-output" class="h-48 sm:h-80 overflow-y-auto p-4 text-gray-300 whitespace-pre-wrap" style="scroll-behavior:smooth;">
         <span class="text-gray-600">Bereit – starte einen Task.</span>
       </div>
     </div>
@@ -295,7 +298,7 @@
         <button onclick="closePreview()" class="text-gray-400 hover:text-gray-600 text-sm">✕ Schließen</button>
       </div>
       <div id="preview-content"
-           class="bg-white rounded-xl border p-8 overflow-y-auto max-h-[70vh] text-sm leading-relaxed"></div>
+           class="bg-white rounded-xl border p-4 sm:p-8 overflow-y-auto max-h-[80vh] sm:max-h-[70vh] text-sm leading-relaxed"></div>
     </div>
   </div>
 

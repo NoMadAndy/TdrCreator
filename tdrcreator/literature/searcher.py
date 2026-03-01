@@ -28,6 +28,7 @@ from tdrcreator.security.privacy import assert_literature_allowed
 _log = get_logger("literature.searcher")
 
 _TIMEOUT = 15  # seconds per HTTP request
+_MAX_QUERY_LEN = 200  # OpenAlex rejects very long search strings (HTTP 400)
 
 
 # ---------------------------------------------------------------------------
@@ -35,6 +36,17 @@ _TIMEOUT = 15  # seconds per HTTP request
 # ---------------------------------------------------------------------------
 
 _MAX_RETRIES = 2  # retry once for transient errors
+
+
+def _truncate_query(q: str, max_len: int = _MAX_QUERY_LEN) -> str:
+    """Truncate query to max_len characters at a word boundary."""
+    if len(q) <= max_len:
+        return q
+    truncated = q[:max_len]
+    last_space = truncated.rfind(" ")
+    result = truncated[:last_space] if last_space > 0 else truncated
+    _log.warning(f"Query truncated from {len(q)} to {len(result)} chars for API search")
+    return result
 
 
 def _safe_get(url: str, params: dict | None = None) -> dict | list | None:
@@ -113,6 +125,7 @@ def search_crossref(
     if guard and not guard.approve(query, source="Crossref"):
         return []
 
+    query = _truncate_query(query)
     params = {
         "query": query,
         "rows": max_results,
@@ -165,6 +178,7 @@ def search_openalex(
     if guard and not guard.approve(query, source="OpenAlex"):
         return []
 
+    query = _truncate_query(query)
     params = {
         "search": query,
         "per-page": max_results,
