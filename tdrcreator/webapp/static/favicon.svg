@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#4338ca"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a5b4fc"/>
+      <stop offset="100%" stop-color="#818cf8"/>
+    </linearGradient>
+  </defs>
+  <!-- Rounded square background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- Document body -->
+  <rect x="120" y="72" width="272" height="368" rx="16" fill="white" opacity="0.95"/>
+  <!-- Folded corner -->
+  <path d="M320 72 L392 144 L320 144 Z" fill="url(#fold)"/>
+  <!-- Text lines (decorative) -->
+  <rect x="160" y="176" width="192" height="8" rx="4" fill="#c7d2fe"/>
+  <rect x="160" y="200" width="160" height="8" rx="4" fill="#c7d2fe"/>
+  <rect x="160" y="224" width="176" height="8" rx="4" fill="#c7d2fe"/>
+  <rect x="160" y="264" width="192" height="8" rx="4" fill="#e0e7ff"/>
+  <rect x="160" y="288" width="144" height="8" rx="4" fill="#e0e7ff"/>
+  <rect x="160" y="312" width="168" height="8" rx="4" fill="#e0e7ff"/>
+  <rect x="160" y="352" width="120" height="8" rx="4" fill="#e0e7ff"/>
+  <!-- TDR label -->
+  <text x="256" y="400" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="800" font-size="48" fill="#4338ca" letter-spacing="4">TDR</text>
+</svg>
