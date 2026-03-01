@@ -293,6 +293,104 @@ async def get_config():
     return JSONResponse(content={"yaml": CONFIG_PATH.read_text(encoding="utf-8")})
 
 
+@app.get("/api/embedding-models")
+async def list_embedding_models():
+    """Return curated list of embedding model presets for the UI."""
+    presets = [
+        {
+            "id": "sentence-transformers/all-MiniLM-L6-v2",
+            "label": "MiniLM-L6-v2 (EN)",
+            "size_mb": 80,
+            "dim": 384,
+            "max_tokens": 256,
+            "lang": "en",
+            "category": "klein",
+            "description": "Sehr schnell, kompakt. Gut fuer englische Texte, schwaecher bei Deutsch.",
+        },
+        {
+            "id": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            "label": "Multilingual MiniLM-L12",
+            "size_mb": 470,
+            "dim": 384,
+            "max_tokens": 128,
+            "lang": "multi",
+            "category": "klein",
+            "description": "Kompaktes multilinguales Modell. Ordentliche deutsche Qualitaet bei geringem Ressourcenverbrauch.",
+        },
+        {
+            "id": "intfloat/multilingual-e5-small",
+            "label": "Multilingual E5 Small",
+            "size_mb": 470,
+            "dim": 384,
+            "max_tokens": 512,
+            "lang": "multi",
+            "category": "klein",
+            "description": "Kleines E5-Modell, 100 Sprachen. Laengere Kontextfenster als MiniLM.",
+        },
+        {
+            "id": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+            "label": "Multilingual MPNet Base",
+            "size_mb": 1100,
+            "dim": 768,
+            "max_tokens": 128,
+            "lang": "multi",
+            "category": "mittel",
+            "description": "Sehr gute multilinguales Qualitaet. Solider Allrounder fuer Deutsch.",
+        },
+        {
+            "id": "intfloat/multilingual-e5-base",
+            "label": "Multilingual E5 Base",
+            "size_mb": 1100,
+            "dim": 768,
+            "max_tokens": 512,
+            "lang": "multi",
+            "category": "mittel",
+            "description": "Starkes multilinguales Retrieval-Modell. Sehr gute Deutsch-Performance.",
+        },
+        {
+            "id": "T-Systems-onsite/cross-en-de-roberta-sentence-transformer",
+            "label": "Cross EN-DE RoBERTa",
+            "size_mb": 1100,
+            "dim": 768,
+            "max_tokens": 512,
+            "lang": "de/en",
+            "category": "mittel",
+            "description": "Speziell fuer Deutsch-Englisch trainiert. Top bei gemischtsprachigen Dokumenten.",
+        },
+        {
+            "id": "jinaai/jina-embeddings-v2-base-de",
+            "label": "Jina v2 Base DE",
+            "size_mb": 640,
+            "dim": 768,
+            "max_tokens": 8192,
+            "lang": "de/en",
+            "category": "mittel",
+            "description": "Deutsch-optimiert mit 8192 Token Kontext. Ideal fuer lange Dokumente.",
+        },
+        {
+            "id": "intfloat/multilingual-e5-large",
+            "label": "Multilingual E5 Large",
+            "size_mb": 2240,
+            "dim": 1024,
+            "max_tokens": 512,
+            "lang": "multi",
+            "category": "gross",
+            "description": "Beste multilinguales Qualitaet. Hoher VRAM-Bedarf (~2.2 GB).",
+        },
+        {
+            "id": "deutsche-telekom/gbert-large-paraphrase-cosine",
+            "label": "GBERT Large Paraphrase",
+            "size_mb": 1340,
+            "dim": 1024,
+            "max_tokens": 512,
+            "lang": "de",
+            "category": "gross",
+            "description": "Rein deutsches Modell. Hoechste Qualitaet fuer deutsche Texte (STS 0.855).",
+        },
+    ]
+    return {"models": presets}
+
+
 @app.post("/api/config")
 async def save_config(request: Request):
     body = await request.json()
