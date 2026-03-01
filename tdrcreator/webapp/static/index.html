@@ -79,6 +79,7 @@
   <button onclick="showTab('config')"    id="tab-config"    class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">⚙️ <span class="hidden sm:inline">Konfiguration</span><span class="sm:hidden">Config</span></button>
   <button onclick="showTab('build')"    id="tab-build"    class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">🔨 Build</button>
   <button onclick="showTab('reports')"  id="tab-reports"  class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">📋 Reports</button>
+  <button onclick="showTab('gpu')"      id="tab-gpu"      class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">🖥️ <span class="hidden sm:inline">GPU</span></button>
 </nav>
 
 <!-- ════════════════════════════════ CONTENT ═════════════════════════════ -->
@@ -302,6 +303,55 @@
     </div>
   </div>
 
+  <!-- ── GPU ── -->
+  <div id="panel-gpu" class="panel hidden fade-in">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <h2 class="text-xl font-semibold">GPU &amp; CUDA Monitoring</h2>
+      <div class="flex items-center gap-3">
+        <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+          <input type="checkbox" id="gpu-autorefresh" class="rounded" checked onchange="toggleGpuAutoRefresh()">
+          Auto-Refresh (3 s)
+        </label>
+        <button onclick="loadGpuStatus()" class="btn-secondary text-sm">↻ Jetzt</button>
+      </div>
+    </div>
+
+    <!-- CUDA / System info -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6" id="gpu-system-cards">
+      <div class="bg-white rounded-xl border p-5 flex items-center gap-4">
+        <span class="text-3xl">⚡</span>
+        <div>
+          <div class="text-xs text-gray-400 mb-1">CUDA-Version</div>
+          <div id="gpu-cuda-version" class="text-lg font-bold text-gray-800">–</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border p-5 flex items-center gap-4">
+        <span class="text-3xl">🔧</span>
+        <div>
+          <div class="text-xs text-gray-400 mb-1">Treiber-Version</div>
+          <div id="gpu-driver-version" class="text-lg font-bold text-gray-800">–</div>
+        </div>
+      </div>
+      <div class="bg-white rounded-xl border p-5 flex items-center gap-4">
+        <span class="text-3xl">🖥️</span>
+        <div>
+          <div class="text-xs text-gray-400 mb-1">Anzahl GPUs</div>
+          <div id="gpu-count" class="text-lg font-bold text-gray-800">–</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- No GPU message -->
+    <div id="gpu-unavailable" class="hidden bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center mb-6">
+      <div class="text-4xl mb-3">⚠️</div>
+      <p class="font-semibold text-yellow-800 mb-1">Keine NVIDIA-GPU erkannt</p>
+      <p id="gpu-error-msg" class="text-sm text-yellow-700"></p>
+    </div>
+
+    <!-- Per-GPU cards -->
+    <div id="gpu-cards" class="space-y-4"></div>
+  </div>
+
 </main>
 
 <!-- ════════════════════════════════ SCRIPTS ═════════════════════════════ -->
@@ -333,6 +383,7 @@ const tabLoaders = {
   config:    () => { loadConfig().then(loadEmbeddingModels); },
   build:     () => {},
   reports:   loadReports,
+  gpu:       loadGpuStatus,
 };
 function showTab(name) {
   document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
@@ -342,6 +393,17 @@ function showTab(name) {
   document.getElementById(`panel-${name}`).classList.remove('hidden');
   const btn = document.getElementById(`tab-${name}`);
   btn.classList.add('tab-active'); btn.classList.remove('text-gray-500');
+
+  // GPU auto-refresh: start when visiting GPU tab, stop otherwise
+  if (name === 'gpu') {
+    if (document.getElementById('gpu-autorefresh').checked && !_gpuRefreshTimer) {
+      _gpuRefreshTimer = setInterval(loadGpuStatus, 3000);
+    }
+  } else {
+    clearInterval(_gpuRefreshTimer);
+    _gpuRefreshTimer = null;
+  }
+
   if (tabLoaders[name]) tabLoaders[name]();
 }
 
@@ -783,6 +845,134 @@ function simpleMarkdown(md) {
     .replace(/^[-*] (.+)$/gm,'<li class="ml-4 list-disc">$1</li>')
     .replace(/\n\n/g,'</p><p class="my-2">');
   return `<p class="my-2">${h}</p>`;
+}
+
+// ─── GPU Monitoring ───────────────────────────────────────────────────────
+let _gpuRefreshTimer = null;
+
+function toggleGpuAutoRefresh() {
+  if (document.getElementById('gpu-autorefresh').checked) {
+    _gpuRefreshTimer = setInterval(loadGpuStatus, 3000);
+  } else {
+    clearInterval(_gpuRefreshTimer);
+    _gpuRefreshTimer = null;
+  }
+}
+
+async function loadGpuStatus() {
+  try {
+    const d = await api('GET', '/api/gpu');
+    renderGpuStatus(d);
+  } catch(e) {
+    document.getElementById('gpu-cards').innerHTML =
+      `<p class="text-red-500 text-sm">Fehler: ${e.message}</p>`;
+  }
+}
+
+function renderGpuStatus(d) {
+  // System cards
+  document.getElementById('gpu-cuda-version').textContent   = d.cuda_version   || '–';
+  document.getElementById('gpu-driver-version').textContent = d.driver_version  || '–';
+  document.getElementById('gpu-count').textContent          = d.gpus ? d.gpus.length : 0;
+
+  const unavEl = document.getElementById('gpu-unavailable');
+  const cardsEl = document.getElementById('gpu-cards');
+
+  if (!d.available || !d.gpus || d.gpus.length === 0) {
+    unavEl.classList.remove('hidden');
+    document.getElementById('gpu-error-msg').textContent = d.error || 'Kein NVIDIA-Treiber gefunden.';
+    cardsEl.innerHTML = '';
+    return;
+  }
+
+  unavEl.classList.add('hidden');
+
+  cardsEl.innerHTML = d.gpus.map(g => {
+    const gpuUtil  = g.utilization_gpu  ?? 0;
+    const memUtil  = g.utilization_memory ?? 0;
+    const memUsed  = g.memory_used_mb  ?? 0;
+    const memTotal = g.memory_total_mb ?? 1;
+    const memPct   = memTotal > 0 ? Math.round(memUsed / memTotal * 100) : 0;
+    const temp     = g.temperature ?? '–';
+    const fan      = g.fan_speed != null ? `${g.fan_speed}%` : '–';
+    const pDraw    = g.power_draw  != null ? `${g.power_draw} W` : '–';
+    const pLimit   = g.power_limit != null ? `${g.power_limit} W` : '–';
+    const pPct     = (g.power_draw != null && g.power_limit > 0)
+                     ? Math.round(g.power_draw / g.power_limit * 100) : 0;
+
+    const tempColor = temp === '–' ? 'text-gray-400'
+                    : temp >= 85 ? 'text-red-600'
+                    : temp >= 70 ? 'text-orange-500'
+                    : 'text-green-600';
+
+    function bar(pct, colorClass) {
+      return `<div class="w-full bg-gray-200 rounded-full h-2.5 mt-1">
+        <div class="${colorClass} h-2.5 rounded-full transition-all" style="width:${Math.min(pct,100)}%"></div>
+      </div>`;
+    }
+    const gpuBarColor  = gpuUtil  >= 90 ? 'bg-red-500' : gpuUtil  >= 70 ? 'bg-orange-400' : 'bg-brand-600';
+    const memBarColor  = memPct   >= 90 ? 'bg-red-500' : memPct   >= 70 ? 'bg-orange-400' : 'bg-purple-500';
+    const pwrBarColor  = pPct     >= 90 ? 'bg-red-500' : pPct     >= 70 ? 'bg-orange-400' : 'bg-teal-500';
+
+    return `
+    <div class="bg-white rounded-xl border p-5 sm:p-6">
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-5">
+        <div>
+          <span class="text-xs text-gray-400 font-mono">GPU ${g.index}</span>
+          <h3 class="font-bold text-gray-800 text-base">${g.name}</h3>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
+            🌡️ <span class="${tempColor} font-semibold">${temp}°C</span>
+          </span>
+          <span class="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
+            💨 Lüfter ${fan}
+          </span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <!-- GPU Utilization -->
+        <div>
+          <div class="flex justify-between text-xs text-gray-500 mb-1">
+            <span>GPU-Auslastung</span>
+            <span class="font-semibold text-gray-700">${gpuUtil}%</span>
+          </div>
+          ${bar(gpuUtil, gpuBarColor)}
+        </div>
+
+        <!-- VRAM -->
+        <div>
+          <div class="flex justify-between text-xs text-gray-500 mb-1">
+            <span>VRAM</span>
+            <span class="font-semibold text-gray-700">${memPct}% · ${fmtMB(memUsed)} / ${fmtMB(memTotal)}</span>
+          </div>
+          ${bar(memPct, memBarColor)}
+        </div>
+
+        <!-- Power -->
+        <div>
+          <div class="flex justify-between text-xs text-gray-500 mb-1">
+            <span>Leistung</span>
+            <span class="font-semibold text-gray-700">${pDraw} / ${pLimit}</span>
+          </div>
+          ${bar(pPct, pwrBarColor)}
+        </div>
+      </div>
+
+      <!-- Detail row -->
+      <div class="mt-4 pt-4 border-t flex flex-wrap gap-4 text-xs text-gray-500">
+        <span>🧠 VRAM frei: <strong class="text-gray-700">${fmtMB(memTotal - memUsed)}</strong></span>
+        <span>📊 Mem-Util: <strong class="text-gray-700">${memUtil}%</strong></span>
+        <span>⚡ TDP: <strong class="text-gray-700">${pPct}%</strong></span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function fmtMB(mb) {
+  if (mb == null) return '–';
+  return mb >= 1024 ? `${(mb/1024).toFixed(1)} GB` : `${mb} MB`;
 }
 
 // ─── Inline styles for buttons ────────────────────────────────────────────
