@@ -6,18 +6,29 @@
 
 Das BR Gremium der Volkswagen Group Services am Standort Süd wurde am 19.03.2022 erstmalig gewählt und hat sich seither von grundauf als eigenständiges Gremium organisiert. So ist eine Geschäftsordnung erstellt und beschlossen worden, die die Aufgaben des Vorsitzes, der Ausschüsse und Beauftragten regelt.
 
+### Informations- und Entscheidungsdruck im Gremium (Sitzungen, Fristen, Einzelfälle)
+Täglich erreichen dem BR 10 bis 15 Anfragen Aus der 540 Personen großen Belegschaft, dem Unternehmen oder dem Betriebsrat Mitte/Nord, mit dem der BR Süd einen engen Austausch pflegt. Aus den Nachrichte ergeben sich Fragestellungen, die mit Fristen versehen sind. Großteils sind dies auch Einzelfälle, die einer besonderen Betrachtung unterzogen werden müssen. Bevor diese Anfragen in den anstehenden Sitzungen beschlossen werden können, müssen Informationen eingeholt, Regelungen geprüft und Formulierungen erstellt werden.
+
+### Wissensquellen verteilt: BV, Tarif, Gesetze, Protokolle, Beschlüsse, Unfallmeldungen, externe Rechtsprechung
+Die Wissensquellen liegen verteilt. Dies umfasst
+- Gesetze (Betriebsverfassungsgesetz, Grundgesetz, Berufsbildungsgesetz, Jugendschutzgesetz, Bürgerliches Gesetzbuch)
+- externe Rechtssprechung
+- Tarifverträge
+- Betriebsvereinbarungen
+- Beschlüsse
+- Protokolle
+- Unfallmeldungen
+
+### Ziel des Dokuments
+### IST-Zustand analysieren (Prozess + Technik + Daten + Rollen)
+### KANN-Zustand als KI-Potenzial skizzieren (System- und Datenperspektive)
+
+Ziel dieses Dokuments ist die Darstellung des IST Zustandes der Prozesse, Technik, Daten und Rollen. Dem gegenüber steht eine Darstellung von möglichen Verbesserungen in Form eines KANN Szenarios aus System- und Datenperspektive.
 
 
+## Backup
 
-Informations- und Entscheidungsdruck im Gremium (Sitzungen, Fristen, Einzelfälle)
 
-Wissensquellen verteilt: BV, Tarif, Gesetze, Protokolle, Beschlüsse, Unfallmeldungen, externe Rechtsprechung
-
-Ziel des TDR
-
-IST-Zustand analysieren (Prozess + Technik + Daten + Rollen)
-
-KANN-Zustand als KI-Potenzial skizzieren (System- und Datenperspektive)
 
 Abgrenzung
 
