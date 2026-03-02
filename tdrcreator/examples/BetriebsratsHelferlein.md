@@ -1,8 +1,13 @@
-Titel: Ist–Kann-Zustand KI-Anwendungen im Standortgremium: Wissensassistenz (RAG) + Mustererkennung aus Unfallmeldungen
+# Titel: Ist–Kann-Zustand KI-Anwendungen im Standortgremium: Wissensassistenz und Mustererkennung aus Unfallmeldungen
 
-1. Einleitung und Zielsetzung (ca. 0,5–1 Seite)
+## 1. Einleitung und Zielsetzung (ca. 0,5–1 Seite)
 
-Ausgangslage
+### Ausgangslage
+
+Das BR Gremium der Volkswagen Group Services am Standort Süd wurde am 19.03.2022 erstmalig gewählt und hat sich seither von grundauf als eigenständiges Gremium organisiert. So ist eine Geschäftsordnung erstellt und beschlossen worden, die die Aufgaben des Vorsitzes, der Ausschüsse und Beauftragten regelt.
+
+
+
 
 Informations- und Entscheidungsdruck im Gremium (Sitzungen, Fristen, Einzelfälle)
 
