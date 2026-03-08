@@ -79,6 +79,7 @@
   <button onclick="showTab('config')"    id="tab-config"    class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">⚙️ <span class="hidden sm:inline">Konfiguration</span><span class="sm:hidden">Config</span></button>
   <button onclick="showTab('build')"    id="tab-build"    class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">🔨 Build</button>
   <button onclick="showTab('reports')"  id="tab-reports"  class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">📋 Reports</button>
+  <button onclick="showTab('editor')"    id="tab-editor"    class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">✍️ <span class="hidden sm:inline">Entwürfe</span><span class="sm:hidden">Edit</span></button>
   <button onclick="showTab('gpu')"      id="tab-gpu"      class="tab-btn px-3 sm:px-5 py-3 text-sm text-gray-500 hover:text-brand-600 transition-colors whitespace-nowrap flex-shrink-0">🖥️ <span class="hidden sm:inline">GPU</span></button>
 </nav>
 
@@ -303,6 +304,99 @@
     </div>
   </div>
 
+  <!-- ── ENTWÜRFE / EDITOR ── -->
+  <div id="panel-editor" class="panel hidden fade-in">
+    <h2 class="text-xl font-semibold mb-6">Entwürfe erstellen & bearbeiten</h2>
+
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-5">
+      <!-- Sidebar: File list -->
+      <div class="lg:col-span-1">
+        <div class="bg-white rounded-xl border overflow-hidden">
+          <div class="px-4 py-3 border-b flex items-center justify-between">
+            <span class="font-medium text-sm text-gray-700">Entwürfe</span>
+            <button onclick="editorNewFile()" class="text-xs bg-brand-600 text-white px-2 py-1 rounded hover:bg-brand-700 transition-colors">+ Neu</button>
+          </div>
+          <div id="editor-file-list" class="max-h-[60vh] overflow-y-auto">
+            <p class="px-4 py-6 text-sm text-gray-400 text-center">Lade…</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main: Editor area -->
+      <div class="lg:col-span-3">
+        <!-- No file selected -->
+        <div id="editor-empty" class="bg-white rounded-xl border p-10 text-center">
+          <div class="text-4xl mb-3">✍️</div>
+          <p class="text-gray-500 font-medium mb-2">Kein Entwurf ausgewählt</p>
+          <p class="text-sm text-gray-400 mb-4">Wähle einen bestehenden Entwurf aus der Liste oder erstelle einen neuen.</p>
+          <button onclick="editorNewFile()" class="btn-primary">+ Neuen Entwurf erstellen</button>
+        </div>
+
+        <!-- Editor active -->
+        <div id="editor-active" class="hidden space-y-4">
+          <!-- File header -->
+          <div class="bg-white rounded-xl border p-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+              <span class="text-lg">✍️</span>
+              <input id="editor-filename" type="text" placeholder="dateiname.md"
+                     class="font-medium text-gray-800 bg-transparent border-b border-gray-200 focus:border-brand-600 focus:outline-none px-1 py-0.5 text-sm min-w-0 w-48" />
+              <span id="editor-save-indicator" class="text-xs text-gray-400"></span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="editorSave()" class="btn-primary text-sm px-3 py-1.5">Speichern</button>
+              <button onclick="editorDelete()" class="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-2 py-1.5 rounded-lg transition-colors">Löschen</button>
+            </div>
+          </div>
+
+          <!-- LLM Instruction box -->
+          <div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200 p-4">
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-lg">🤖</span>
+              <span class="font-medium text-sm text-purple-800">LLM-Anweisung</span>
+              <span class="text-xs text-purple-500">(Ollama)</span>
+            </div>
+            <div class="flex gap-2">
+              <input id="editor-llm-instruction" type="text"
+                     placeholder="z.B. &quot;Füge einen Abschnitt über Risiken hinzu&quot; oder &quot;Schreibe den Text formaler um&quot;"
+                     class="flex-1 text-sm border border-purple-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white"
+                     onkeydown="if(event.key==='Enter')editorLlmAssist()" />
+              <button onclick="editorLlmAssist()" id="btn-llm-assist"
+                      class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap">
+                Ausführen
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-2 mt-2">
+              <button onclick="editorSetInstruction('Erstelle einen Entwurf zum Thema: ')" class="text-xs bg-white border border-purple-200 text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition-colors">Neues Thema…</button>
+              <button onclick="editorSetInstruction('Fasse den Text kürzer zusammen')" class="text-xs bg-white border border-purple-200 text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition-colors">Kürzen</button>
+              <button onclick="editorSetInstruction('Ergänze mehr Details und Beispiele')" class="text-xs bg-white border border-purple-200 text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition-colors">Mehr Details</button>
+              <button onclick="editorSetInstruction('Schreibe den Text formaler und professioneller um')" class="text-xs bg-white border border-purple-200 text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition-colors">Formaler</button>
+              <button onclick="editorSetInstruction('Füge eine Risikoanalyse hinzu')" class="text-xs bg-white border border-purple-200 text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition-colors">+ Risiken</button>
+              <button onclick="editorSetInstruction('Korrigiere Grammatik und Rechtschreibung')" class="text-xs bg-white border border-purple-200 text-purple-700 px-2 py-1 rounded hover:bg-purple-50 transition-colors">Korrektur</button>
+            </div>
+            <div id="editor-llm-status" class="text-xs mt-2"></div>
+          </div>
+
+          <!-- Text editor -->
+          <div class="bg-white rounded-xl border overflow-hidden">
+            <div class="px-4 py-2 border-b flex items-center justify-between bg-gray-50">
+              <span class="text-xs text-gray-500 font-mono">Markdown-Editor</span>
+              <div class="flex items-center gap-3">
+                <button onclick="editorTogglePreview()" id="btn-editor-preview" class="text-xs text-brand-600 hover:underline">Vorschau</button>
+                <span id="editor-wordcount" class="text-xs text-gray-400"></span>
+              </div>
+            </div>
+            <textarea id="editor-content"
+                      class="w-full h-[50vh] font-mono text-sm p-4 resize-y focus:outline-none focus:ring-2 focus:ring-brand-600 border-0"
+                      placeholder="Schreibe deinen Entwurf hier in Markdown…"
+                      oninput="editorUpdateWordcount()"
+                      spellcheck="true"></textarea>
+            <div id="editor-preview-pane" class="hidden p-4 sm:p-6 overflow-y-auto max-h-[50vh] text-sm leading-relaxed"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── GPU ── -->
   <div id="panel-gpu" class="panel hidden fade-in">
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
@@ -383,6 +477,7 @@ const tabLoaders = {
   config:    () => { loadConfig().then(loadEmbeddingModels); },
   build:     () => {},
   reports:   loadReports,
+  editor:    loadEntwuerfe,
   gpu:       loadGpuStatus,
 };
 function showTab(name) {
@@ -845,6 +940,180 @@ function simpleMarkdown(md) {
     .replace(/^[-*] (.+)$/gm,'<li class="ml-4 list-disc">$1</li>')
     .replace(/\n\n/g,'</p><p class="my-2">');
   return `<p class="my-2">${h}</p>`;
+}
+
+// ─── Design Editor (Entwürfe) ─────────────────────────────────────────────
+let editorCurrentFile = null;
+let editorPreviewMode = false;
+
+async function loadEntwuerfe() {
+  const list = document.getElementById('editor-file-list');
+  try {
+    const { files } = await api('GET', '/api/entwuerfe');
+    if (!files.length) {
+      list.innerHTML = '<p class="px-4 py-6 text-sm text-gray-400 text-center">Noch keine Entwürfe.</p>';
+      return;
+    }
+    list.innerHTML = files.map(f => {
+      const active = editorCurrentFile === f.name;
+      const bg = active ? 'bg-brand-100' : 'hover:bg-gray-50';
+      return `<div class="flex items-center justify-between px-4 py-3 border-b border-gray-50 cursor-pointer ${bg} transition-colors"
+                   onclick="editorOpenFile('${f.name}')">
+        <div class="min-w-0">
+          <div class="text-sm font-medium text-gray-800 truncate">${f.name}</div>
+          <div class="text-xs text-gray-400">${fmt(f.size)} · ${fmtDate(f.mtime)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<p class="px-4 py-4 text-sm text-red-500">Fehler: ${e.message}</p>`;
+  }
+}
+
+async function editorOpenFile(filename) {
+  try {
+    const { name, content } = await api('GET', `/api/entwuerfe/${encodeURIComponent(filename)}`);
+    editorCurrentFile = name;
+    document.getElementById('editor-empty').classList.add('hidden');
+    document.getElementById('editor-active').classList.remove('hidden');
+    document.getElementById('editor-filename').value = name.replace(/\.(md|txt)$/, '');
+    document.getElementById('editor-content').value = content;
+    document.getElementById('editor-save-indicator').textContent = '';
+    editorUpdateWordcount();
+    if (editorPreviewMode) editorTogglePreview();
+    loadEntwuerfe();
+  } catch(e) { alert(`Fehler: ${e.message}`); }
+}
+
+function editorNewFile() {
+  editorCurrentFile = null;
+  document.getElementById('editor-empty').classList.add('hidden');
+  document.getElementById('editor-active').classList.remove('hidden');
+  document.getElementById('editor-filename').value = '';
+  document.getElementById('editor-content').value = '';
+  document.getElementById('editor-save-indicator').textContent = '';
+  document.getElementById('editor-llm-instruction').value = '';
+  document.getElementById('editor-llm-status').textContent = '';
+  editorUpdateWordcount();
+  if (editorPreviewMode) editorTogglePreview();
+  document.getElementById('editor-filename').focus();
+}
+
+async function editorSave() {
+  let name = document.getElementById('editor-filename').value.trim();
+  if (!name) { alert('Bitte einen Dateinamen eingeben.'); return; }
+  if (!name.endsWith('.md') && !name.endsWith('.txt')) name += '.md';
+  const content = document.getElementById('editor-content').value;
+  const indicator = document.getElementById('editor-save-indicator');
+  try {
+    const result = await api('POST', `/api/entwuerfe/${encodeURIComponent(name)}`, { content });
+    editorCurrentFile = result.name;
+    indicator.className = 'text-xs text-green-600';
+    indicator.textContent = '✓ Gespeichert';
+    setTimeout(() => { indicator.textContent = ''; }, 3000);
+    loadEntwuerfe();
+  } catch(e) {
+    indicator.className = 'text-xs text-red-600';
+    indicator.textContent = `Fehler: ${e.message}`;
+  }
+}
+
+async function editorDelete() {
+  if (!editorCurrentFile) return;
+  if (!confirm(`"${editorCurrentFile}" wirklich löschen?`)) return;
+  try {
+    await api('DELETE', `/api/entwuerfe/${encodeURIComponent(editorCurrentFile)}`);
+    editorCurrentFile = null;
+    document.getElementById('editor-active').classList.add('hidden');
+    document.getElementById('editor-empty').classList.remove('hidden');
+    loadEntwuerfe();
+  } catch(e) { alert(`Fehler: ${e.message}`); }
+}
+
+function editorUpdateWordcount() {
+  const text = document.getElementById('editor-content').value;
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  document.getElementById('editor-wordcount').textContent = `${words} Wörter`;
+}
+
+function editorTogglePreview() {
+  const textarea = document.getElementById('editor-content');
+  const preview = document.getElementById('editor-preview-pane');
+  const btn = document.getElementById('btn-editor-preview');
+  editorPreviewMode = !editorPreviewMode;
+  if (editorPreviewMode) {
+    textarea.classList.add('hidden');
+    preview.classList.remove('hidden');
+    preview.innerHTML = simpleMarkdown(textarea.value);
+    btn.textContent = 'Bearbeiten';
+  } else {
+    textarea.classList.remove('hidden');
+    preview.classList.add('hidden');
+    btn.textContent = 'Vorschau';
+  }
+}
+
+function editorSetInstruction(text) {
+  const input = document.getElementById('editor-llm-instruction');
+  input.value = text;
+  input.focus();
+}
+
+async function editorLlmAssist() {
+  const instruction = document.getElementById('editor-llm-instruction').value.trim();
+  if (!instruction) { alert('Bitte eine Anweisung eingeben.'); return; }
+
+  const content = document.getElementById('editor-content').value;
+  const filename = editorCurrentFile || 'neu.md';
+  const status = document.getElementById('editor-llm-status');
+  const btn = document.getElementById('btn-llm-assist');
+
+  btn.disabled = true;
+  btn.textContent = 'Verarbeite…';
+  status.className = 'text-xs mt-2 text-purple-600';
+  status.textContent = 'LLM verarbeitet Anweisung…';
+
+  try {
+    const { task_id } = await api('POST', `/api/entwuerfe/${encodeURIComponent(filename)}/llm-assist`, {
+      instruction, content
+    });
+
+    // Poll task until done
+    const pollResult = async () => {
+      for (let i = 0; i < 120; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const task = await api('GET', `/api/tasks/${task_id}`);
+          if (task.status === 'done') {
+            document.getElementById('editor-content').value = task.result.content;
+            editorUpdateWordcount();
+            status.className = 'text-xs mt-2 text-green-600';
+            status.textContent = '✓ LLM-Antwort übernommen. Bitte prüfen und speichern.';
+            btn.disabled = false;
+            btn.textContent = 'Ausführen';
+            return;
+          }
+          if (task.status === 'error') {
+            status.className = 'text-xs mt-2 text-red-600';
+            status.textContent = `Fehler: ${task.error}`;
+            btn.disabled = false;
+            btn.textContent = 'Ausführen';
+            return;
+          }
+        } catch(e) { /* continue polling */ }
+      }
+      status.className = 'text-xs mt-2 text-red-600';
+      status.textContent = 'Timeout – LLM hat nicht rechtzeitig geantwortet.';
+      btn.disabled = false;
+      btn.textContent = 'Ausführen';
+    };
+    pollResult();
+  } catch(e) {
+    status.className = 'text-xs mt-2 text-red-600';
+    status.textContent = `Fehler: ${e.message}`;
+    btn.disabled = false;
+    btn.textContent = 'Ausführen';
+  }
 }
 
 // ─── GPU Monitoring ───────────────────────────────────────────────────────
