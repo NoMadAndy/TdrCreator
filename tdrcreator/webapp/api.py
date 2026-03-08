@@ -973,6 +973,149 @@ async def wipe_all():
 
 
 # ---------------------------------------------------------------------------
+# Routes: Design Editor (Entwürfe)
+# ---------------------------------------------------------------------------
+
+ENTWURF_DIR = DOCS_DIR / "entwurf"
+
+
+@app.get("/api/entwuerfe")
+async def list_entwuerfe():
+    """List all draft documents in the entwurf folder."""
+    ENTWURF_DIR.mkdir(parents=True, exist_ok=True)
+    files = []
+    for f in sorted(ENTWURF_DIR.iterdir()):
+        if f.is_file() and f.suffix.lower() in {".md", ".txt"}:
+            files.append({
+                "name": f.name,
+                "size": f.stat().st_size,
+                "mtime": f.stat().st_mtime,
+            })
+    return {"files": files}
+
+
+@app.get("/api/entwuerfe/{filename}")
+async def get_entwurf(filename: str):
+    """Read a single draft document."""
+    safe_name = Path(filename).name
+    target = ENTWURF_DIR / safe_name
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Entwurf nicht gefunden")
+    return {"name": safe_name, "content": target.read_text(encoding="utf-8")}
+
+
+@app.post("/api/entwuerfe/{filename}")
+async def save_entwurf(filename: str, request: Request):
+    """Create or update a draft document."""
+    body = await request.json()
+    content: str = body.get("content", "")
+    safe_name = Path(filename).name
+    if not safe_name.endswith((".md", ".txt")):
+        safe_name += ".md"
+    ENTWURF_DIR.mkdir(parents=True, exist_ok=True)
+    target = ENTWURF_DIR / safe_name
+    target.write_text(content, encoding="utf-8")
+    return {"ok": True, "name": safe_name, "size": len(content.encode("utf-8"))}
+
+
+@app.delete("/api/entwuerfe/{filename}")
+async def delete_entwurf(filename: str):
+    """Delete a draft document."""
+    safe_name = Path(filename).name
+    target = ENTWURF_DIR / safe_name
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Entwurf nicht gefunden")
+    target.unlink()
+    return {"ok": True, "deleted": safe_name}
+
+
+@app.post("/api/entwuerfe/{filename}/llm-assist")
+async def llm_assist_entwurf(filename: str, request: Request):
+    """Use the LLM to modify/enhance a draft based on user instructions."""
+    body = await request.json()
+    instruction: str = body.get("instruction", "").strip()
+    current_content: str = body.get("content", "")
+    if not instruction:
+        raise HTTPException(status_code=400, detail="Keine Anweisung angegeben")
+
+    task = _create_task("llm-assist")
+    loop = asyncio.get_event_loop()
+    asyncio.create_task(_run_llm_assist(task, loop, filename, instruction, current_content))
+    return {"task_id": task.task_id}
+
+
+async def _run_llm_assist(
+    task: Task,
+    loop: asyncio.AbstractEventLoop,
+    filename: str,
+    instruction: str,
+    current_content: str,
+) -> None:
+    handler = _attach_queue_handler(task, loop)
+    try:
+        result_text = await asyncio.to_thread(
+            _do_llm_assist, task, instruction, current_content
+        )
+        task.status = "done"
+        task.result = {"content": result_text}
+    except Exception as e:
+        task.status = "error"
+        task.error = str(e)
+        await task.messages.put({"type": "log", "level": "ERROR", "msg": f"Fehler: {e}"})
+    finally:
+        _detach_handler(handler)
+        await task.messages.put(None)
+
+
+def _do_llm_assist(task: Task, instruction: str, current_content: str) -> str:
+    from tdrcreator.report.llm import generate
+
+    cfg = _load_config()
+
+    if current_content.strip():
+        prompt = f"""Du bist ein technischer Redakteur und Assistent.
+
+Der Benutzer arbeitet an einem Entwurf (Dokument). Hier ist der aktuelle Inhalt:
+
+=== AKTUELLER ENTWURF ===
+{current_content}
+=== ENDE ENTWURF ===
+
+Der Benutzer gibt dir folgende Anweisung:
+{instruction}
+
+Bitte führe die Anweisung aus und gib den vollständigen, aktualisierten Entwurf zurück.
+Gib NUR den aktualisierten Dokumentinhalt zurück, ohne zusätzliche Erklärungen oder Kommentare.
+Behalte das Markdown-Format bei."""
+    else:
+        prompt = f"""Du bist ein technischer Redakteur und Assistent.
+
+Der Benutzer möchte einen neuen Entwurf erstellen. Er gibt dir folgende Anweisung:
+{instruction}
+
+Bitte erstelle den Entwurf basierend auf der Anweisung.
+Gib NUR den Dokumentinhalt zurück, ohne zusätzliche Erklärungen.
+Verwende Markdown-Format."""
+
+    logging.getLogger("tdrcreator").info(
+        f"LLM-Assistent: Anweisung wird verarbeitet ({len(instruction)} Zeichen)…"
+    )
+
+    result = generate(
+        prompt=prompt,
+        base_url=cfg.llm_base_url,
+        model=cfg.llm_model,
+        temperature=cfg.llm_temperature,
+        timeout=cfg.llm_timeout,
+    )
+
+    logging.getLogger("tdrcreator").info(
+        f"LLM-Assistent: Antwort erhalten ({len(result)} Zeichen)"
+    )
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
