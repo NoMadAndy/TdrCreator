@@ -994,6 +994,30 @@ async def list_entwuerfe():
     return {"files": files}
 
 
+@app.post("/api/editor/export-docx")
+async def export_editor_docx(request: Request):
+    """Export editor content as DOCX download."""
+    body = await request.json()
+    content: str = body.get("content", "")
+    filename: str = body.get("filename", "entwurf")
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="Kein Inhalt zum Exportieren")
+    import re as _re
+    safe_name = _re.sub(r'[^\w\-]', '_', Path(filename).stem)
+    out_path = OUT_DIR / f"_draft_{safe_name}.docx"
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        from tdrcreator.report.exporter import export_docx
+        await asyncio.to_thread(export_docx, content, out_path)
+        return FileResponse(
+            path=str(out_path),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            filename=f"{safe_name}.docx",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export fehlgeschlagen: {e}")
+
+
 @app.get("/api/entwuerfe/{filename}")
 async def get_entwurf(filename: str):
     """Read a single draft document."""
@@ -1035,12 +1059,22 @@ async def llm_assist_entwurf(filename: str, request: Request):
     body = await request.json()
     instruction: str = body.get("instruction", "").strip()
     current_content: str = body.get("content", "")
+    provider: str = body.get("provider", "ollama")
+    ext_api_key: str = body.get("api_key", "")
+    ext_model: str = body.get("model", "")
     if not instruction:
         raise HTTPException(status_code=400, detail="Keine Anweisung angegeben")
+    if provider not in ("ollama", "openai", "anthropic"):
+        raise HTTPException(status_code=400, detail="Ungültiger Anbieter")
+    if provider != "ollama" and not ext_api_key:
+        raise HTTPException(status_code=400, detail="API-Key erforderlich für externen Anbieter")
 
     task = _create_task("llm-assist")
     loop = asyncio.get_event_loop()
-    asyncio.create_task(_run_llm_assist(task, loop, filename, instruction, current_content))
+    asyncio.create_task(_run_llm_assist(
+        task, loop, filename, instruction, current_content,
+        provider, ext_api_key, ext_model
+    ))
     return {"task_id": task.task_id}
 
 
@@ -1050,11 +1084,15 @@ async def _run_llm_assist(
     filename: str,
     instruction: str,
     current_content: str,
+    provider: str = "ollama",
+    ext_api_key: str = "",
+    ext_model: str = "",
 ) -> None:
     handler = _attach_queue_handler(task, loop)
     try:
         result_text = await asyncio.to_thread(
-            _do_llm_assist, task, instruction, current_content
+            _do_llm_assist, task, instruction, current_content,
+            provider, ext_api_key, ext_model
         )
         task.status = "done"
         task.result = {"content": result_text}
@@ -1067,9 +1105,10 @@ async def _run_llm_assist(
         await task.messages.put(None)
 
 
-def _do_llm_assist(task: Task, instruction: str, current_content: str) -> str:
-    from tdrcreator.report.llm import generate
-
+def _do_llm_assist(
+    task: Task, instruction: str, current_content: str,
+    provider: str = "ollama", ext_api_key: str = "", ext_model: str = "",
+) -> str:
     cfg = _load_config()
 
     if current_content.strip():
@@ -1098,21 +1137,72 @@ Gib NUR den Dokumentinhalt zurück, ohne zusätzliche Erklärungen.
 Verwende Markdown-Format."""
 
     logging.getLogger("tdrcreator").info(
-        f"LLM-Assistent: Anweisung wird verarbeitet ({len(instruction)} Zeichen)…"
+        f"LLM-Assistent ({provider}): Anweisung wird verarbeitet ({len(instruction)} Zeichen)…"
     )
 
-    result = generate(
-        prompt=prompt,
-        base_url=cfg.llm_base_url,
-        model=cfg.llm_model,
-        temperature=cfg.llm_temperature,
-        timeout=cfg.llm_timeout,
-    )
+    if provider == "ollama":
+        from tdrcreator.report.llm import generate
+        result = generate(
+            prompt=prompt,
+            base_url=cfg.llm_base_url,
+            model=cfg.llm_model,
+            temperature=cfg.llm_temperature,
+            timeout=cfg.llm_timeout,
+        )
+    elif provider == "openai":
+        result = _call_openai(prompt, ext_api_key, ext_model or "gpt-4o", cfg.llm_temperature)
+    elif provider == "anthropic":
+        result = _call_anthropic(prompt, ext_api_key, ext_model or "claude-sonnet-4-20250514", cfg.llm_temperature)
+    else:
+        raise ValueError(f"Unbekannter Anbieter: {provider}")
 
     logging.getLogger("tdrcreator").info(
-        f"LLM-Assistent: Antwort erhalten ({len(result)} Zeichen)"
+        f"LLM-Assistent ({provider}): Antwort erhalten ({len(result)} Zeichen)"
     )
     return result
+
+
+# ---------------------------------------------------------------------------
+# External LLM connectors (for editor assist only — user provides API key)
+# ---------------------------------------------------------------------------
+
+def _call_openai(prompt: str, api_key: str, model: str, temperature: float) -> str:
+    """Call OpenAI Chat Completions API."""
+    import requests as _req
+    resp = _req.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json={
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+        },
+        timeout=180,
+    )
+    resp.raise_for_status()
+    return resp.json()["choices"][0]["message"]["content"]
+
+
+def _call_anthropic(prompt: str, api_key: str, model: str, temperature: float) -> str:
+    """Call Anthropic Messages API."""
+    import requests as _req
+    resp = _req.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model,
+            "max_tokens": 8192,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+        },
+        timeout=180,
+    )
+    resp.raise_for_status()
+    return resp.json()["content"][0]["text"]
 
 
 # ---------------------------------------------------------------------------

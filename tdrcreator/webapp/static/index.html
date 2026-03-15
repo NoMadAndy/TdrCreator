@@ -49,6 +49,8 @@
     .dt-btn { border: 2px solid transparent; transition: all .15s; }
     .dt-btn.selected { border-color: currentColor; font-weight: 600; }
     .ecat-btn { transition: all .15s; }
+    .fmt-btn { width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;cursor:pointer;background:white;border:1px solid #e5e7eb;color:#374151;font-size:13px;transition:all .1s;flex-shrink:0; }
+    .fmt-btn:hover { background:#e0e7ff;border-color:#4f46e5;color:#4f46e5; }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-800">
@@ -343,17 +345,32 @@
               <span id="editor-save-indicator" class="text-xs text-gray-400"></span>
             </div>
             <div class="flex items-center gap-2">
-              <button onclick="editorSave()" class="btn-primary text-sm px-3 py-1.5">Speichern</button>
-              <button onclick="editorDelete()" class="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-2 py-1.5 rounded-lg transition-colors">Löschen</button>
+              <button onclick="editorSave()" class="btn-primary text-sm px-3 py-1.5">💾 Speichern</button>
+              <button onclick="editorExportDocx()" class="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 hover:border-blue-400 px-2 py-1.5 rounded-lg transition-colors font-medium">📥 DOCX Export</button>
+              <button onclick="editorDelete()" class="text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-2 py-1.5 rounded-lg transition-colors">🗑️ Löschen</button>
             </div>
           </div>
 
           <!-- LLM Instruction box -->
           <div class="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200 p-4">
-            <div class="flex items-center gap-2 mb-3">
+            <div class="flex flex-wrap items-center gap-2 mb-3">
               <span class="text-lg">🤖</span>
               <span class="font-medium text-sm text-purple-800">LLM-Anweisung</span>
-              <span class="text-xs text-purple-500">(Ollama)</span>
+              <div class="flex items-center gap-2 ml-auto">
+                <select id="editor-llm-provider" onchange="editorLlmProviderChanged()" class="text-xs border border-purple-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-purple-400 cursor-pointer">
+                  <option value="ollama">🔒 Ollama (Lokal)</option>
+                  <option value="openai">🌐 OpenAI (ChatGPT)</option>
+                  <option value="anthropic">🌐 Anthropic (Claude)</option>
+                </select>
+              </div>
+            </div>
+            <!-- External LLM fields (hidden by default) -->
+            <div id="editor-llm-external-fields" class="hidden mb-3 flex flex-wrap items-center gap-2 p-2 bg-orange-50 border border-orange-200 rounded-lg">
+              <span class="text-xs text-orange-700 font-medium">⚠️ Daten werden extern gesendet:</span>
+              <input id="editor-llm-api-key" type="password" placeholder="API-Key eingeben"
+                     class="text-xs border border-orange-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-orange-400 w-48" />
+              <input id="editor-llm-model" type="text" placeholder="Modell (z.B. gpt-4o)"
+                     class="text-xs border border-orange-200 rounded px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-orange-400 w-40" />
             </div>
             <div class="flex gap-2">
               <input id="editor-llm-instruction" type="text"
@@ -378,10 +395,40 @@
 
           <!-- Text editor -->
           <div class="bg-white rounded-xl border overflow-hidden">
-            <div class="px-4 py-2 border-b flex items-center justify-between bg-gray-50">
-              <span class="text-xs text-gray-500 font-mono">Markdown-Editor</span>
-              <div class="flex items-center gap-3">
-                <button onclick="editorTogglePreview()" id="btn-editor-preview" class="text-xs text-brand-600 hover:underline">Vorschau</button>
+            <!-- Formatting Toolbar -->
+            <div class="px-2 py-1.5 border-b bg-gray-50 flex flex-wrap items-center gap-1">
+              <div class="flex items-center gap-0.5 border-r border-gray-300 pr-2 mr-1">
+                <button onclick="editorFormat('**','**')" title="Fett (Strg+B)" class="fmt-btn font-bold">B</button>
+                <button onclick="editorFormat('*','*')" title="Kursiv (Strg+I)" class="fmt-btn italic">I</button>
+                <button onclick="editorFormat('~~','~~')" title="Durchgestrichen" class="fmt-btn line-through">S</button>
+              </div>
+              <div class="flex items-center gap-0.5 border-r border-gray-300 pr-2 mr-1">
+                <button onclick="editorHeading(1)" title="Überschrift 1" class="fmt-btn text-xs font-bold">H1</button>
+                <button onclick="editorHeading(2)" title="Überschrift 2" class="fmt-btn text-xs font-bold">H2</button>
+                <button onclick="editorHeading(3)" title="Überschrift 3" class="fmt-btn text-xs font-bold">H3</button>
+                <button onclick="editorHeading(4)" title="Überschrift 4" class="fmt-btn text-xs">H4</button>
+              </div>
+              <div class="flex items-center gap-0.5 border-r border-gray-300 pr-2 mr-1">
+                <button onclick="editorList('ul')" title="Aufzählung" class="fmt-btn">•</button>
+                <button onclick="editorList('ol')" title="Nummerierte Liste" class="fmt-btn text-xs">1.</button>
+                <button onclick="editorList('check')" title="Checkliste" class="fmt-btn text-xs">☑</button>
+              </div>
+              <div class="flex items-center gap-0.5 border-r border-gray-300 pr-2 mr-1">
+                <button onclick="editorInsertLink()" title="Link einfügen (Strg+K)" class="fmt-btn text-xs">🔗</button>
+                <button onclick="editorInsertImage()" title="Bild einfügen" class="fmt-btn text-xs">🖼</button>
+              </div>
+              <div class="flex items-center gap-0.5 border-r border-gray-300 pr-2 mr-1">
+                <button onclick="editorInlineCode()" title="Inline-Code" class="fmt-btn font-mono text-xs">&lt;&gt;</button>
+                <button onclick="editorCodeBlock()" title="Code-Block" class="fmt-btn font-mono text-xs">{ }</button>
+                <button onclick="editorBlockquote()" title="Zitat / Blockquote" class="fmt-btn text-xs">❝</button>
+              </div>
+              <div class="flex items-center gap-0.5">
+                <button onclick="editorInsertHr()" title="Trennlinie" class="fmt-btn text-xs">―</button>
+                <button onclick="editorInsertTable()" title="Tabelle einfügen" class="fmt-btn text-xs">⊞</button>
+                <button onclick="editorInsertFootnote()" title="Fußnote" class="fmt-btn text-xs">¹</button>
+              </div>
+              <div class="ml-auto flex items-center gap-3">
+                <button onclick="editorTogglePreview()" id="btn-editor-preview" class="text-xs text-brand-600 hover:underline font-medium">Vorschau</button>
                 <span id="editor-wordcount" class="text-xs text-gray-400"></span>
               </div>
             </div>
@@ -1059,6 +1106,143 @@ function editorSetInstruction(text) {
   input.focus();
 }
 
+// ─── Formatting Toolbar Functions ─────────────────────────────────────────
+function editorFormat(prefix, suffix) {
+  const ta = document.getElementById('editor-content');
+  const start = ta.selectionStart, end = ta.selectionEnd;
+  const text = ta.value, selected = text.substring(start, end);
+  const replacement = prefix + (selected || 'Text') + suffix;
+  ta.value = text.substring(0, start) + replacement + text.substring(end);
+  ta.focus();
+  if (!selected) { ta.selectionStart = start + prefix.length; ta.selectionEnd = start + prefix.length + 4; }
+  else { ta.selectionStart = start; ta.selectionEnd = start + replacement.length; }
+  editorUpdateWordcount();
+}
+function editorHeading(level) {
+  const ta = document.getElementById('editor-content');
+  const start = ta.selectionStart, end = ta.selectionEnd, text = ta.value;
+  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+  const lineEnd = text.indexOf('\n', end);
+  const actualEnd = lineEnd === -1 ? text.length : lineEnd;
+  const line = text.substring(lineStart, actualEnd);
+  const cleanLine = line.replace(/^#{1,6}\s*/, '');
+  const prefix = '#'.repeat(level) + ' ';
+  const newLine = prefix + (cleanLine || 'Überschrift');
+  ta.value = text.substring(0, lineStart) + newLine + text.substring(actualEnd);
+  ta.focus(); ta.selectionStart = lineStart; ta.selectionEnd = lineStart + newLine.length;
+  editorUpdateWordcount();
+}
+function editorList(type) {
+  const ta = document.getElementById('editor-content');
+  const start = ta.selectionStart, end = ta.selectionEnd, text = ta.value;
+  const selected = text.substring(start, end);
+  const lines = selected ? selected.split('\n') : ['Eintrag 1', 'Eintrag 2', 'Eintrag 3'];
+  let result;
+  if (type === 'ul') result = lines.map(l => '- ' + l.replace(/^[-*\d.]+\s*/, '')).join('\n');
+  else if (type === 'ol') result = lines.map((l, i) => (i+1) + '. ' + l.replace(/^[-*\d.]+\s*/, '')).join('\n');
+  else result = lines.map(l => '- [ ] ' + l.replace(/^[-*\d.]+\s*(\[[ x]\]\s*)?/, '')).join('\n');
+  ta.value = text.substring(0, start) + result + text.substring(end);
+  ta.focus(); editorUpdateWordcount();
+}
+function editorInsertLink() {
+  const ta = document.getElementById('editor-content');
+  const start = ta.selectionStart, end = ta.selectionEnd, text = ta.value;
+  const selected = text.substring(start, end), linkText = selected || 'Linktext';
+  ta.value = text.substring(0, start) + '[' + linkText + '](url)' + text.substring(end);
+  ta.focus(); ta.selectionStart = start + linkText.length + 3; ta.selectionEnd = ta.selectionStart + 3;
+  editorUpdateWordcount();
+}
+function editorInsertImage() {
+  const ta = document.getElementById('editor-content');
+  const pos = ta.selectionStart;
+  ta.value = ta.value.substring(0, pos) + '![Bildbeschreibung](bild-url)' + ta.value.substring(ta.selectionEnd);
+  ta.focus(); editorUpdateWordcount();
+}
+function editorInlineCode() { editorFormat('`', '`'); }
+function editorCodeBlock() {
+  const ta = document.getElementById('editor-content');
+  const start = ta.selectionStart, end = ta.selectionEnd, text = ta.value;
+  const selected = text.substring(start, end);
+  const ins = '\n```\n' + (selected || 'Code hier') + '\n```\n';
+  ta.value = text.substring(0, start) + ins + text.substring(end);
+  ta.focus(); editorUpdateWordcount();
+}
+function editorBlockquote() {
+  const ta = document.getElementById('editor-content');
+  const start = ta.selectionStart, end = ta.selectionEnd, text = ta.value;
+  const selected = text.substring(start, end);
+  const lines = selected ? selected.split('\n') : ['Zitat hier'];
+  ta.value = text.substring(0, start) + lines.map(l => '> ' + l).join('\n') + text.substring(end);
+  ta.focus(); editorUpdateWordcount();
+}
+function editorInsertHr() {
+  const ta = document.getElementById('editor-content');
+  const pos = ta.selectionStart;
+  ta.value = ta.value.substring(0, pos) + '\n\n---\n\n' + ta.value.substring(ta.selectionEnd);
+  ta.focus(); editorUpdateWordcount();
+}
+function editorInsertTable() {
+  const ta = document.getElementById('editor-content');
+  const pos = ta.selectionStart;
+  const table = '\n| Spalte 1 | Spalte 2 | Spalte 3 |\n|----------|----------|----------|\n| Zelle    | Zelle    | Zelle    |\n| Zelle    | Zelle    | Zelle    |\n';
+  ta.value = ta.value.substring(0, pos) + table + ta.value.substring(ta.selectionEnd);
+  ta.focus(); editorUpdateWordcount();
+}
+function editorInsertFootnote() {
+  const ta = document.getElementById('editor-content');
+  const pos = ta.selectionStart, text = ta.value;
+  const n = (text.match(/\[\^\d+\]/g) || []).length + 1;
+  ta.value = text.substring(0, pos) + '[^' + n + ']' + text.substring(ta.selectionEnd) + '\n[^' + n + ']: Fußnotentext\n';
+  ta.focus(); editorUpdateWordcount();
+}
+
+// Keyboard shortcuts for editor
+document.addEventListener('DOMContentLoaded', function() {
+  const ta = document.getElementById('editor-content');
+  if (ta) ta.addEventListener('keydown', function(e) {
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === 'b') { e.preventDefault(); editorFormat('**', '**'); }
+      if (e.key === 'i') { e.preventDefault(); editorFormat('*', '*'); }
+      if (e.key === 'k') { e.preventDefault(); editorInsertLink(); }
+      if (e.key === 's') { e.preventDefault(); editorSave(); }
+    }
+  });
+});
+
+// ─── DOCX Export ──────────────────────────────────────────────────────────
+async function editorExportDocx() {
+  const content = document.getElementById('editor-content').value;
+  if (!content.trim()) { alert('Kein Inhalt zum Exportieren.'); return; }
+  let name = document.getElementById('editor-filename').value.trim() || 'entwurf';
+  name = name.replace(/\.(md|txt)$/, '');
+  try {
+    const response = await fetch('/api/editor/export-docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, filename: name })
+    });
+    if (!response.ok) { const t = await response.text(); throw new Error(t); }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = name + '.docx'; a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) { alert('Export-Fehler: ' + e.message); }
+}
+
+// ─── LLM Provider Selection ──────────────────────────────────────────────
+function editorLlmProviderChanged() {
+  const provider = document.getElementById('editor-llm-provider').value;
+  const fields = document.getElementById('editor-llm-external-fields');
+  const modelInput = document.getElementById('editor-llm-model');
+  if (provider === 'ollama') {
+    fields.classList.add('hidden');
+  } else {
+    fields.classList.remove('hidden');
+    if (provider === 'openai') modelInput.placeholder = 'z.B. gpt-4o, gpt-4o-mini';
+    else modelInput.placeholder = 'z.B. claude-sonnet-4-20250514';
+  }
+}
+
 async function editorLlmAssist() {
   const instruction = document.getElementById('editor-llm-instruction').value.trim();
   if (!instruction) { alert('Bitte eine Anweisung eingeben.'); return; }
@@ -1068,15 +1252,27 @@ async function editorLlmAssist() {
   const status = document.getElementById('editor-llm-status');
   const btn = document.getElementById('btn-llm-assist');
 
+  const provider = document.getElementById('editor-llm-provider').value;
+  const apiKey = document.getElementById('editor-llm-api-key')?.value || '';
+  const extModel = document.getElementById('editor-llm-model')?.value || '';
+  if (provider !== 'ollama' && !apiKey) {
+    alert('Bitte API-Key für den externen Anbieter eingeben.');
+    return;
+  }
+
   btn.disabled = true;
   btn.textContent = 'Verarbeite…';
   status.className = 'text-xs mt-2 text-purple-600';
-  status.textContent = 'LLM verarbeitet Anweisung…';
+  status.textContent = (provider === 'ollama' ? 'Ollama' : provider) + ' verarbeitet Anweisung…';
 
   try {
-    const { task_id } = await api('POST', `/api/entwuerfe/${encodeURIComponent(filename)}/llm-assist`, {
-      instruction, content
-    });
+    const payload = { instruction, content };
+    if (provider !== 'ollama') {
+      payload.provider = provider;
+      payload.api_key = apiKey;
+      payload.model = extModel;
+    }
+    const { task_id } = await api('POST', `/api/entwuerfe/${encodeURIComponent(filename)}/llm-assist`, payload);
 
     // Poll task until done
     const pollResult = async () => {
